@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>本体质量评价报告</title>
+  <script src="https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: "Microsoft YaHei", sans-serif; background: #0d1117; color: #e6edf3; padding: 24px; }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .sub { color: #8b949e; font-size: 13px; margin-bottom: 20px; }
+    .top { display: flex; gap: 24px; margin-bottom: 24px; flex-wrap: wrap; }
+    .overall { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px 40px; text-align: center; }
+    .overall .num { font-size: 52px; font-weight: bold; color: #58a6ff; }
+    .overall .lbl { color: #8b949e; font-size: 13px; }
+    .radar-box { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 16px; width: 380px; height: 320px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .score { font-size: 20px; font-weight: bold; }
+    .sub-item { padding: 8px 0; border-top: 1px solid #21262d; }
+    .sub-item .n { font-size: 13px; color: #c9d1d9; display: flex; justify-content: space-between; }
+    .sub-item .v { font-weight: bold; }
+    .sub-item .d { font-size: 11px; color: #8b949e; margin-top: 2px; }
+    .samples { font-size: 11px; color: #f0883e; margin-top: 4px; word-break: break-all; }
+    .pending { color: #6e7681; font-style: italic; }
+    .bar { height: 5px; background: #21262d; border-radius: 3px; margin-top: 5px; overflow: hidden; }
+    .bar > div { height: 100%; border-radius: 3px; }
+    .good { color: #3fb950; } .warn { color: #d29922; } .bad { color: #f85149; }
+  </style>
+</head>
+<body>
+  <h1>🔍 本体质量评价报告</h1>
+  <div class="sub" id="ts">加载中…</div>
+  <div class="top">
+    <div class="overall"><div class="num" id="overall">—</div><div class="lbl">综合评分 / 100</div></div>
+    <div class="radar-box"><canvas id="radar"></canvas></div>
+  </div>
+  <div class="grid" id="cards"></div>
+
+  <script>
+    const scoreColor = s => s >= 90 ? "#3fb950" : s >= 75 ? "#d29922" : "#f85149";
+    fetch("data/quality-report.json").then(r => r.json()).then(rep => {
+      document.getElementById("ts").textContent = "生成时间：" + new Date(rep.generatedAt).toLocaleString("zh-CN");
+      document.getElementById("overall").textContent = rep.overallScore;
+      document.getElementById("overall").style.color = scoreColor(rep.overallScore);
+
+      const dims = Object.values(rep.dimensions);
+      // 雷达图
+      new Chart(document.getElementById("radar"), {
+        type: "radar",
+        data: {
+          labels: dims.map(d => d.name),
+          datasets: [{
+            label: "维度得分",
+            data: dims.map(d => d.score ?? 0),
+            backgroundColor: "rgba(88,166,255,0.2)", borderColor: "#58a6ff",
+            pointBackgroundColor: "#58a6ff",
+          }],
+        },
+        options: {
+          scales: { r: { min: 0, max: 100, ticks: { color: "#8b949e", backdropColor: "transparent" },
+            grid: { color: "#30363d" }, angleLines: { color: "#30363d" }, pointLabels: { color: "#e6edf3", font: { size: 13 } } } },
+          plugins: { legend: { display: false } },
+        },
+      });
+
+      // 维度卡片
+      const cards = document.getElementById("cards");
+      for (const d of dims) {
+        const sc = d.score;
+        let html = `<div class="card"><h2>${d.name}<span class="score" style="color:${sc!==null?scoreColor(sc):'#6e7681'}">${sc!==null?sc:'部分待启用'}</span></h2>`;
+        for (const s of Object.values(d.sub)) {
+          if (s.status) {
+            html += `<div class="sub-item"><div class="n"><span>${s.name}</span><span class="pending">待启用</span></div><div class="d">${s.detail||''}</div></div>`;
+            continue;
+          }
+          const val = s.value !== null && s.value !== undefined ? `${s.value}${s.unit||''}` : '—';
+          html += `<div class="sub-item"><div class="n"><span>${s.name}</span><span class="v">${val}</span></div>`;
+          if (s.detail) html += `<div class="d">${s.detail}</div>`;
+          if (s.samples?.length) html += `<div class="samples">⚠ ${s.samples.slice(0,5).join("　")}</div>`;
+          if (s.byType) html += `<div class="d">分层：${Object.entries(s.byType).map(([k,v])=>`${k} ${v}`).join("　")}</div>`;
+          html += `</div>`;
+        }
+        html += `</div>`;
+        cards.innerHTML += html;
+      }
+    }).catch(e => { document.getElementById("ts").textContent = "加载失败：" + e.message; });
+  </script>
+</body>
+</html>
