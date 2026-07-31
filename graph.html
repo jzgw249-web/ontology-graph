@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>实体关系图谱 — ontology-graph</title>
+  <script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: "Microsoft YaHei", sans-serif; background: #0d1117; color: #e6edf3; }
+    #header { padding: 12px 20px; background: #161b22; border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+    #header h1 { font-size: 16px; font-weight: bold; }
+    #stats { font-size: 12px; color: #8b949e; }
+    .legend { display: flex; gap: 14px; font-size: 12px; }
+    .legend span { display: flex; align-items: center; gap: 5px; }
+    .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+    #net { width: 100vw; height: calc(100vh - 50px); }
+    #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #8b949e; }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>🕸 实体关系图谱</h1>
+    <span id="stats">加载中…</span>
+    <div class="legend">
+      <span><i class="dot" style="background:#ef4444"></i>人物</span>
+      <span><i class="dot" style="background:#8b5cf6"></i>组织</span>
+      <span><i class="dot" style="background:#22d3ee"></i>地点</span>
+      <span><i class="dot" style="background:#f59e0b"></i>设施</span>
+      <span><i class="dot" style="background:#22c55e"></i>事件</span>
+    </div>
+  </div>
+  <div id="net"><div id="loading">正在加载图谱…</div></div>
+
+  <script>
+    fetch("data/viz.json")
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById("loading").remove();
+        document.getElementById("stats").textContent =
+          `${data.nodes.length} 个实体 · ${data.edges.length} 条关系（共现≥3）`;
+
+        const nodes = new vis.DataSet(data.nodes);
+        const edges = new vis.DataSet(data.edges);
+        const container = document.getElementById("net");
+
+        const network = new vis.Network(container, { nodes, edges }, {
+          nodes: {
+            shape: "dot",
+            scaling: { min: 8, max: 55, label: { min: 12, max: 30 } },
+            font: { color: "#e6edf3", size: 14, face: "Microsoft YaHei" },
+            borderWidth: 0,
+          },
+          edges: {
+            color: { color: "#30363d", highlight: "#58a6ff", hover: "#58a6ff" },
+            scaling: { min: 0.5, max: 8 },
+            smooth: { type: "continuous" },
+          },
+          physics: {
+            barnesHut: { gravitationalConstant: -8000, springLength: 120, springConstant: 0.04 },
+            stabilization: { iterations: 200 },
+          },
+          interaction: { hover: true, tooltipDelay: 100, navigationButtons: true, keyboard: true },
+        });
+
+        network.on("stabilizationIterationsDone", () => network.setOptions({ physics: false }));
+      })
+      .catch(e => {
+        document.getElementById("loading").textContent = "加载失败：" + e.message + "（需通过本地服务器打开，见控制台）";
+        console.error(e);
+      });
+  </script>
+</body>
+</html>
