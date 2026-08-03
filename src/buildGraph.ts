@@ -12,6 +12,23 @@ const TYPE_FIELDS: { field: keyof RawEntities; type: EntityType }[] = [
   { field: "events", type: "event" },
 ];
 
+// 已知国家清单（本体 Country 类）—— 用于执行公理 C1：国家应为 location，不应标为 organization
+const KNOWN_COUNTRIES = new Set([
+  "伊朗","美国","以色列","沙特阿拉伯","埃及","叙利亚","伊拉克","黎巴嫩","约旦","土耳其",
+  "卡塔尔","科威特","巴林","阿联酋","也门","利比亚","苏丹","突尼斯","阿尔及利亚","摩洛哥",
+  "中国","俄罗斯","英国","法国","德国","意大利","西班牙","印度","巴基斯坦","阿富汗",
+  "乌克兰","波兰","加拿大","巴西","阿根廷","日本","韩国","朝鲜","巴勒斯坦","欧盟",
+]);
+// 纠偏日志
+const typeFixLog: { entity: string; from: string; to: string }[] = [];
+function fixCountryType(id: string, type: EntityType): EntityType {
+  if (KNOWN_COUNTRIES.has(id) && type !== "location") {
+    typeFixLog.push({ entity: id, from: type, to: "location" });
+    return "location";
+  }
+  return type;
+}
+
 // 噪音过滤：太短、纯数字、常见停用词
 function isNoise(name: string): boolean {
   const n = name.trim();
@@ -73,7 +90,7 @@ async function main() {
         const id = canon;
         if (seen.has(id)) continue;
         seen.add(id);
-        articleEntities.push({ id, type });
+        articleEntities.push({ id, type: fixCountryType(id, type) });
       }
     }
 
@@ -108,9 +125,17 @@ async function main() {
   fs.mkdirSync("data", { recursive: true });
   fs.writeFileSync("data/graph.json", JSON.stringify(graph, null, 2), "utf8");
 
+  // 纠偏日志（公理 C1 执行记录，供前后对比）
+  fs.writeFileSync("data/type-fix-log.json", JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    totalFixed: typeFixLog.length,
+    fixes: typeFixLog,
+  }, null, 2), "utf8");
+
   console.log("\n=== 图谱构建完成 ===");
   console.log(`有效文章: ${usedArticles}`);
   console.log(`节点数: ${graph.nodes.length}`);
+  console.log(`国家类型纠偏: ${typeFixLog.length} 个（公理C1: organization->location）`);
   console.log(`边数: ${graph.edges.length}`);
   console.log("输出: data/graph.json");
 
