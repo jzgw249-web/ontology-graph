@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>本体公理合规检测</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:"Microsoft YaHei",sans-serif; background:#0d1117; color:#e6edf3; padding:24px; }
+    h1 { font-size:22px; margin-bottom:4px; }
+    .sub { color:#8b949e; font-size:13px; margin-bottom:24px; }
+    .dims { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+    .dim-card { background:#161b22; border:1px solid #30363d; border-radius:10px; padding:16px; text-align:center; }
+    .dim-card .name { font-size:13px; color:#8b949e; }
+    .dim-card .pen { font-size:32px; font-weight:bold; margin-top:6px; }
+    .p0 { color:#3fb950; } .pn { color:#f85149; }
+    h2 { font-size:16px; color:#58a6ff; margin:24px 0 12px; border-left:3px solid #58a6ff; padding-left:10px; }
+    .axiom { background:#161b22; border:1px solid #30363d; border-radius:10px; padding:16px; margin-bottom:12px; }
+    .ax-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    .ax-id { font-size:15px; font-weight:bold; }
+    .badges span { font-size:10px; padding:2px 8px; border-radius:4px; margin-left:6px; }
+    .d-accuracy { background:#f8514922; color:#f85149; } .d-completeness { background:#3fb95022; color:#3fb950; }
+    .d-consistency { background:#d2992222; color:#d29922; } .d-connectivity { background:#a371f722; color:#a371f7; }
+    .det-yes { background:#3fb95022; color:#3fb950; } .det-no { background:#6e768122; color:#6e7681; }
+    .ax-stat { font-size:13px; margin:6px 0; }
+    .viol { color:#f85149; font-weight:bold; } .ok { color:#3fb950; font-weight:bold; }
+    .bar { height:6px; background:#21262d; border-radius:3px; margin:8px 0; overflow:hidden; }
+    .bar > div { height:100%; border-radius:3px; }
+    .samples { font-size:11px; color:#f0883e; margin-top:6px; }
+    .pending { color:#6e7681; font-style:italic; font-size:12px; }
+  </style>
+</head>
+<body>
+  <h1>⚖ 本体公理合规检测</h1>
+  <div class="sub" id="sub">加载中…</div>
+
+  <h2>各维度公理扣分</h2>
+  <div class="dims" id="dims"></div>
+
+  <h2>公理明细</h2>
+  <div id="axioms"></div>
+
+  <script>
+    const DIM_ZH = { accuracy:"准确性", completeness:"完整性", consistency:"一致性", connectivity:"连通性" };
+    fetch("data/axiom-report.json").then(r=>r.json()).then(rep=>{
+      const detectable = rep.axioms.filter(a=>a.detectable).length;
+      document.getElementById("sub").textContent =
+        `${rep.axioms.length} 条公理 · ${detectable} 条已检测 · ${rep.axioms.length-detectable} 条待第二步`;
+
+      // 维度扣分卡
+      const dimsEl = document.getElementById("dims");
+      for (const [dim, pen] of Object.entries(rep.dimensionPenalty)) {
+        const d = document.createElement("div");
+        d.className = "dim-card";
+        d.innerHTML = `<div class="name">${DIM_ZH[dim]}</div><div class="pen ${pen>0?'pn':'p0'}">${pen>0?'-'+pen.toFixed(1):'0'}</div>`;
+        dimsEl.appendChild(d);
+      }
+
+      // 公理明细
+      const axEl = document.getElementById("axioms");
+      for (const a of rep.axioms) {
+        const div = document.createElement("div");
+        div.className = "axiom";
+        let body;
+        if (!a.detectable) {
+          body = `<div class="pending">${a.note}</div>`;
+        } else {
+          const rateColor = a.violationRate > 0 ? "#f85149" : "#3fb950";
+          body = `<div class="ax-stat">违规 <span class="${a.violations>0?'viol':'ok'}">${a.violations}/${a.total}</span>（${a.violationRate}%）　扣分 <span class="${a.penalty>0?'viol':'ok'}">${a.penalty.toFixed(1)}</span></div>
+            <div class="bar"><div style="width:${Math.min(a.violationRate,100)}%; background:${rateColor}"></div></div>
+            ${a.samples.length?`<div class="samples">⚠ ${a.samples.slice(0,5).join("　")}</div>`:''}`;
+        }
+        div.innerHTML = `<div class="ax-head">
+          <span class="ax-id">${a.id} ${a.zh}</span>
+          <span class="badges"><span class="d-${a.boundDimension}">${DIM_ZH[a.boundDimension]}</span><span class="${a.detectable?'det-yes':'det-no'}">${a.detectable?'已检测':'待第二步'}</span></span>
+        </div>${body}`;
+        axEl.appendChild(div);
+      }
+    }).catch(e=>{ document.getElementById("sub").textContent="加载失败："+e.message; });
+  </script>
+</body>
+</html>
