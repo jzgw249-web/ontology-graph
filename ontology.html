@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>地缘情报本体 Schema</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: "Microsoft YaHei", sans-serif; background: #0d1117; color: #e6edf3; padding: 24px; }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .sub { color: #8b949e; font-size: 13px; margin-bottom: 24px; }
+    h2 { font-size: 16px; color: #58a6ff; margin: 24px 0 12px; border-left: 3px solid #58a6ff; padding-left: 10px; }
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 18px; }
+    /* 类树 */
+    .tree { font-size: 13px; line-height: 1.9; }
+    .tree .cls { color: #e6edf3; }
+    .tree .top { color: #f0883e; font-weight: bold; }
+    .tree .zh { color: #8b949e; font-size: 11px; }
+    .tree .indent1 { padding-left: 24px; }
+    .tree .indent2 { padding-left: 48px; }
+    .badge { display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 3px; margin-left: 6px; }
+    .b-country { background: #1f6feb33; color: #58a6ff; }
+    .b-source { background: #23863633; color: #3fb950; }
+    /* 关系表 */
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #21262d; }
+    th { color: #8b949e; font-weight: normal; }
+    .g-conflict { color: #f85149; } .g-cooperation { color: #3fb950; }
+    .g-diplomacy { color: #d29922; } .g-structure { color: #a371f7; }
+    .card-val { color: #8b949e; font-size: 11px; }
+    /* 公理 */
+    .axiom { padding: 12px; border-bottom: 1px solid #21262d; }
+    .axiom-head { display: flex; justify-content: space-between; align-items: center; }
+    .axiom-id { font-weight: bold; color: #e6edf3; }
+    .dim { font-size: 10px; padding: 2px 8px; border-radius: 4px; }
+    .d-accuracy { background: #f8514922; color: #f85149; }
+    .d-completeness { background: #3fb95022; color: #3fb950; }
+    .d-consistency { background: #d2992222; color: #d29922; }
+    .d-connectivity { background: #a371f722; color: #a371f7; }
+    .axiom-rule { font-size: 12px; color: #c9d1d9; margin: 4px 0; }
+    .axiom-pen { font-size: 11px; color: #8b949e; }
+    .detect { font-size: 9px; padding: 1px 6px; border-radius: 3px; }
+    .det-yes { background: #3fb95022; color: #3fb950; }
+    .det-no { background: #6e768122; color: #6e7681; }
+  </style>
+</head>
+<body>
+  <h1>🧬 地缘情报本体 Schema</h1>
+  <div class="sub" id="sub">加载中…</div>
+
+  <div class="cols">
+    <div>
+      <h2>类层级 Class Hierarchy</h2>
+      <div class="card tree" id="tree"></div>
+    </div>
+    <div>
+      <h2>关系类型 Relations</h2>
+      <div class="card"><table id="relTable"><thead><tr><th>关系</th><th>定义域→值域</th><th>基数</th><th>反向</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+
+  <h2>公理约束 Axioms（绑定质量维度）</h2>
+  <div class="card" id="axioms"></div>
+
+  <script>
+    const DIM_ZH = { accuracy:"准确性", completeness:"完整性", consistency:"一致性", connectivity:"连通性" };
+    fetch("data/ontology.json").then(r => r.json()).then(o => {
+      document.getElementById("sub").textContent =
+        `${o.classes.length} 个类 · ${o.relations.length} 种关系 · ${o.axioms.length} 条公理（${o.axioms.filter(a=>a.detectable).length} 可自动检测）`;
+
+      // 类树
+      const topClasses = o.classes.filter(c => c.parent === "Entity" || c.parent === null);
+      let treeHtml = "";
+      function renderClass(c, depth) {
+        const isTop = depth === 0;
+        const indent = depth === 1 ? "indent1" : depth === 2 ? "indent2" : "";
+        let badge = "";
+        if (c.id === "Country") badge = '<span class="badge b-country">独立顶层</span>';
+        if (c.id === "SourceArticle") badge = '<span class="badge b-source">溯源</span>';
+        treeHtml += `<div class="${indent}"><span class="${isTop?'top':'cls'}">${c.id}</span> <span class="zh">${c.zh}</span>${badge}</div>`;
+        o.classes.filter(x => x.parent === c.id).forEach(child => renderClass(child, depth+1));
+      }
+      o.classes.filter(c => c.parent === "Entity").forEach(c => renderClass(c, 0));
+      document.getElementById("tree").innerHTML = treeHtml;
+
+      // 关系表
+      const tb = document.querySelector("#relTable tbody");
+      o.relations.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td class="g-${r.group}">${r.zh}${r.symmetric?' ⇄':' →'}</td>
+          <td class="card-val">${r.domain.join("/")} → ${r.range.join("/")}</td>
+          <td class="card-val">${r.cardinality}</td>
+          <td class="card-val">${r.inverse}</td>`;
+        tb.appendChild(tr);
+      });
+
+      // 公理
+      let axHtml = "";
+      o.axioms.forEach(a => {
+        axHtml += `<div class="axiom">
+          <div class="axiom-head">
+            <span class="axiom-id">${a.id} ${a.zh}</span>
+            <span>
+              <span class="dim d-${a.boundDimension}">${DIM_ZH[a.boundDimension]}</span>
+              <span class="detect ${a.detectable?'det-yes':'det-no'}">${a.detectable?'可检测':'待第二步'}</span>
+            </span>
+          </div>
+          <div class="axiom-rule">${a.rule}</div>
+          <div class="axiom-pen">扣分：${a.penalty}</div>
+        </div>`;
+      });
+      document.getElementById("axioms").innerHTML = axHtml;
+    }).catch(e => { document.getElementById("sub").textContent = "加载失败：" + e.message; });
+  </script>
+</body>
+</html>
