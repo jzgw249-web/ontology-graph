@@ -111,8 +111,42 @@ async function main() {
     unit: "%", detail: `${similarPairs} 对高相似实体疑似未合并`, samples: simSamples,
   };
   // 3.3 关系矛盾率（待启用，需语义关系）
-  cons.sub.relationConflict = { name: "实体关系矛盾率", value: null, status: PENDING, detail: "需先构建语义关系（当前为共现关系，无方向语义）" };
-  cons.score = Number((100 - (cons.sub.multiTypeConflict.value + cons.sub.unmergedSimilar.value) / 2).toFixed(1));
+  // 3.3 实体关系矛盾率（读语义关系 relations.json）
+  let relationConflict: any = { name: "实体关系矛盾率", value: null, status: PENDING, detail: "未找到 data/relations.json，请先运行 extractRelations" };
+  try {
+    const triples = JSON.parse(fs.readFileSync("data/relations.json", "utf8"));
+    const CONFLICT_REL = new Set(["攻击", "威胁", "敌对", "制裁", "谴责"]);
+    const FRIENDLY_REL = new Set(["结盟", "支持", "谈判", "协议"]);
+    // 按无序实体对聚合其关系类别
+    const pairRels = new Map<string, { conflict: boolean; friendly: boolean }>();
+    let selfLoop = 0;
+    for (const t of triples) {
+      if (t.subject === t.object) { selfLoop++; continue; }
+      const key = [t.subject, t.object].sort().join(" ↔ ");
+      const rec = pairRels.get(key) || { conflict: false, friendly: false };
+      if (CONFLICT_REL.has(t.relation)) rec.conflict = true;
+      if (FRIENDLY_REL.has(t.relation)) rec.friendly = true;
+      pairRels.set(key, rec);
+    }
+    // 矛盾对：同一对既冲突又友好
+    const conflictPairs: string[] = [];
+    for (const [pair, rec] of pairRels) if (rec.conflict && rec.friendly) conflictPairs.push(pair);
+    const totalPairs = pairRels.size;
+    const conflictCount = conflictPairs.length + selfLoop;
+    relationConflict = {
+      name: "实体关系矛盾率",
+      value: totalPairs ? Number((conflictCount / totalPairs * 100).toFixed(1)) : 0,
+      unit: "%",
+      detail: `${conflictPairs.length} 对实体敌友并存 + ${selfLoop} 个自指关系，共 ${totalPairs} 对实体关系`,
+      samples: conflictPairs.slice(0, 8),
+    };
+  } catch (e) {
+    // relations.json 不存在则保持待启用
+  }
+  cons.sub.relationConflict = relationConflict;
+  const consSubs = [cons.sub.multiTypeConflict.value, cons.sub.unmergedSimilar.value];
+  if (cons.sub.relationConflict.value !== null) consSubs.push(cons.sub.relationConflict.value);
+  cons.score = Number((100 - consSubs.reduce((a: number, b: number) => a + b, 0) / consSubs.length).toFixed(1));
   report.dimensions.consistency = cons;
 
   // ═══ 维度4：连通性 ═══
