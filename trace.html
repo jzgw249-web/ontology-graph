@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>情报溯源链</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:"Microsoft YaHei",sans-serif; background:#0d1117; color:#e6edf3; padding:24px; }
+    h1 { font-size:22px; margin-bottom:4px; }
+    .sub { color:#8b949e; font-size:13px; margin-bottom:20px; }
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+    .stat { background:#161b22; border:1px solid #30363d; border-radius:10px; padding:16px; text-align:center; }
+    .stat .num { font-size:28px; font-weight:bold; color:#58a6ff; }
+    .stat .lbl { font-size:12px; color:#8b949e; margin-top:4px; }
+    .search { width:100%; padding:10px 14px; background:#161b22; border:1px solid #30363d; border-radius:8px; color:#e6edf3; font-size:14px; margin-bottom:16px; }
+    .trace { background:#161b22; border:1px solid #30363d; border-radius:10px; padding:14px 16px; margin-bottom:10px; }
+    .chain { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .ent { padding:3px 10px; background:#1f6feb22; color:#58a6ff; border-radius:5px; font-size:13px; font-weight:600; }
+    .rel { padding:2px 8px; border-radius:4px; font-size:12px; font-weight:bold; }
+    .r-conflict { background:#f8514922; color:#f85149; } .r-cooperation { background:#3fb95022; color:#3fb950; }
+    .r-diplomacy { background:#d2992222; color:#d29922; } .r-structure { background:#a371f722; color:#a371f7; }
+    .arrow { color:#6e7681; }
+    .src { margin-top:10px; padding-top:10px; border-top:1px solid #21262d; font-size:12px; color:#8b949e; }
+    .src-line { margin:3px 0; display:flex; gap:8px; align-items:center; }
+    .src-icon { color:#6e7681; }
+    .minio { color:#3fb950; font-family:monospace; font-size:11px; }
+    .conf { font-size:10px; color:#8b949e; margin-left:auto; }
+    .ev { font-style:italic; color:#f0883e; font-size:11px; }
+    a { color:#58a6ff; text-decoration:none; }
+    a:hover { text-decoration:underline; }
+  </style>
+</head>
+<body>
+  <h1>🔗 情报溯源链</h1>
+  <div class="sub" id="sub">加载中…</div>
+
+  <div class="stats" id="stats"></div>
+  <input class="search" id="search" placeholder="搜索实体或关系…（如 以色列、攻击）" />
+  <div id="traces"></div>
+
+  <script>
+    const REL_GROUP = { 攻击:"conflict",威胁:"conflict",敌对:"conflict", 结盟:"cooperation",支持:"cooperation",谈判:"cooperation", 制裁:"diplomacy",谴责:"diplomacy",协议:"diplomacy", 隶属:"structure",位于:"structure",涉及:"structure",源自:"structure",报道:"structure" };
+    let allTraces = [];
+
+    fetch("data/traceability.json").then(r=>r.json()).then(rep=>{
+      allTraces = rep.traces;
+      document.getElementById("sub").textContent = `${rep.totalTraces} 条溯源记录 · MinIO bucket: ${rep.bucket}`;
+
+      document.getElementById("stats").innerHTML = `
+        <div class="stat"><div class="num">${rep.totalTraces}</div><div class="lbl">溯源记录</div></div>
+        <div class="stat"><div class="num">${rep.sourceCompleteness}%</div><div class="lbl">可溯源到文章</div></div>
+        <div class="stat"><div class="num">${rep.minioCompleteness}%</div><div class="lbl">可定位 MinIO 原文</div></div>
+        <div class="stat"><div class="num">${new Set(rep.traces.map(t=>t.source.articleId)).size}</div><div class="lbl">涉及源文章</div></div>`;
+
+      render(allTraces);
+    }).catch(e=>{ document.getElementById("sub").textContent="加载失败："+e.message; });
+
+    function render(traces) {
+      const el = document.getElementById("traces");
+      el.innerHTML = traces.slice(0, 100).map(t => {
+        const g = REL_GROUP[t.triple.relation] || "structure";
+        return `<div class="trace">
+          <div class="chain">
+            <span class="ent">${t.triple.subject}</span>
+            <span class="rel r-${g}">${t.triple.relation}</span>
+            <span class="arrow">→</span>
+            <span class="ent">${t.triple.object}</span>
+            <span class="conf">置信 ${t.confidence}</span>
+          </div>
+          ${t.evidence?`<div class="ev" style="margin-top:6px">「${t.evidence}」</div>`:''}
+          <div class="src">
+            <div class="src-line"><span class="src-icon">📄</span> 源文章 ${t.source.articleId}：${t.source.title??'?'}</div>
+            <div class="src-line"><span class="src-icon">🗄</span> <span class="minio">${t.source.minioPath??'（未回填）'}</span>
+              ${t.source.url?`<a href="${t.source.url}" target="_blank">查看原文 ↗</a>`:''}</div>
+          </div>
+        </div>`;
+      }).join("");
+      if (traces.length > 100) el.innerHTML += `<div class="sub">…共 ${traces.length} 条，显示前 100</div>`;
+    }
+
+    document.getElementById("search").addEventListener("input", e => {
+      const q = e.target.value.trim().toLowerCase();
+      if (!q) return render(allTraces);
+      render(allTraces.filter(t =>
+        t.triple.subject.toLowerCase().includes(q) ||
+        t.triple.object.toLowerCase().includes(q) ||
+        t.triple.relation.includes(q)));
+    });
+  </script>
+</body>
+</html>
