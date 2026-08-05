@@ -50,7 +50,10 @@
 
   <div class="cols">
     <div>
-      <h2>类层级 Class Hierarchy</h2>
+      <h2>多语种支持 Multilingual Labels</h2>
+  <div class="card" id="langs" style="margin-bottom:16px;"></div>
+
+  <h2>类层级 Class Hierarchy</h2>
       <div class="card tree" id="tree"></div>
     </div>
     <div>
@@ -65,8 +68,20 @@
   <script>
     const DIM_ZH = { accuracy:"准确性", completeness:"完整性", consistency:"一致性", connectivity:"连通性" };
     fetch("data/ontology.json").then(r => r.json()).then(o => {
+      // 渲染多语种支持
+      if (o.languages) {
+        document.getElementById("langs").innerHTML =
+          '<div style="display:flex; gap:16px; flex-wrap:wrap;">' +
+          o.languages.map(function(l){
+            return '<div style="background:#1f6feb1a; border:1px solid #1f6feb44; border-radius:8px; padding:10px 16px;">' +
+              '<div style="font-size:15px; font-weight:bold; color:#58a6ff;">' + l.name + ' (' + l.code + ')</div>' +
+              '<div style="font-size:11px; color:#8b949e; margin-top:3px;">字段 ' + l.field + ' · 覆盖 ' + l.coverage + '</div>' +
+              '</div>';
+          }).join('') + '</div>' +
+          '<div style="font-size:12px; color:#8b949e; margin-top:10px;">每个实体提供多语言标签，支持跨语言检索（输入中/英/阿任一语言均可查询同一实体）</div>';
+      }
       document.getElementById("sub").textContent =
-        `${o.classes.length} 个类 · ${o.relations.length} 种关系 · ${o.axioms.length} 条公理（${o.axioms.filter(a=>a.detectable).length} 可自动检测）`;
+        `${o.classes.length} 个类 · ${o.relations.length} 种关系 · ${o.axioms.length} 条公理（${o.axioms.filter(a=>a.detectable).length} 可自动检测） · 支持 ${o.languages ? o.languages.length : 0} 种语言`;
 
       // 类树
       const topClasses = o.classes.filter(c => c.parent === "Entity" || c.parent === null);

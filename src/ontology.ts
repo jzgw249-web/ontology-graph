@@ -27,10 +27,19 @@ export interface ClassDef {
 }
 
 // 通用属性（所有实体继承）
+// ══════════════ 多语种支持 ══════════════
+// 本体为每个实体提供多语言标签（multilingual labels），支持跨语言检索
+export const SUPPORTED_LANGUAGES = [
+  { code: "zh", name: "中文", field: "canonicalZh", coverage: "100%" },
+  { code: "en", name: "英语", field: "canonicalEn", coverage: "100%" },
+  { code: "ar", name: "阿拉伯语", field: "canonicalAr", coverage: "41%" },
+];
+
 const BASE_PROPS: PropertyDef[] = [
   { name: "id", zh: "标识", type: "string", required: true },
   { name: "canonicalZh", zh: "中文规范名", type: "string", required: true },
   { name: "canonicalEn", zh: "英文规范名", type: "string", required: false },
+  { name: "canonicalAr", zh: "阿拉伯语规范名", type: "string", required: false, note: "多语种标签：源自 raw 阿语原文" },
   { name: "type", zh: "实体类型", type: "enum", required: true,
     enumValues: ["Country","Person","Organization","Location","Facility","Event","SourceArticle"] },
   { name: "freq", zh: "出现频次", type: "int", required: false, note: "可视化节点大小" },
