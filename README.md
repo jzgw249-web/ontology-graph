@@ -1,10 +1,10 @@
 # ontology-graph
 
-地缘情报知识工程系统：从 redroom 采集的原始数据出发，构建实体关系图谱、抽取语义关系、定义领域本体、建立可量化的质量评价体系，并实现情报完整可溯源。
+地缘情报知识工程系统：从 redroom 采集的原始数据出发，构建实体关系图谱、抽取语义关系、定义领域本体、建立可量化的质量评价体系，实现情报完整可溯源，并提供基于本体的地理可视化。
 
 ## 数据流
 
-    redroom 采集 → MinIO 按主题归档 → 共现图谱 → 语义关系 → 本体 Schema → 质量评价 → 溯源链
+    redroom 采集 → MinIO 按主题归档 → 共现图谱 → 语义关系 → 本体 Schema → 质量评价 → 溯源链 → 地理可视化
 
 两个项目通过 MinIO / MySQL 解耦：redroom 只写数据，本项目只读。
 
@@ -19,10 +19,11 @@
 |---|---|---|
 | 1 | 实体共现图谱 | graph.html |
 | 2 | 五维度质量评价 | quality.html |
-| 3 | LLM 语义关系抽取 | semantic.html |
+| 3 | LLM 语义关系抽取（全量） | semantic.html |
 | 4 | 本体 Schema 定义 | ontology.html |
-| 4b | 本体公理合规检测（本体驱动评价） | axioms.html |
+| 4b | 本体公理合规检测（本体驱动评价 + C1 纠偏） | axioms.html |
 | 5 | 情报溯源链 | trace.html |
+| 6 | 本体地理可视化（MapLibre） | map.html |
 
 ## 目录结构
 
@@ -30,9 +31,9 @@
 
 - types.ts — 实体/图谱类型定义
 - db.ts — 连接 redroom MySQL
-- buildGraph.ts — 构建共现图谱 → data/graph.json
+- buildGraph.ts — 构建共现图谱 + 公理 C1 国家类型纠偏 → data/graph.json
 - evaluate.ts — 五维度质量评价 → data/quality-report.json
-- extractRelations.ts — LLM 语义关系抽取（12 类关系）→ data/relations.json
+- extractRelations.ts — LLM 语义关系抽取（12 类关系，支持分批）→ data/relations.json
 - ontology.ts — 地缘情报本体 Schema（21 类 / 14 关系 / 7 公理）
 - validateAxioms.ts — 本体公理合规检测 → data/axiom-report.json
 - traceability.ts — 溯源链构建（关系→文章→MinIO）→ data/traceability.json
@@ -40,8 +41,9 @@
 根目录脚本：
 
 - make-viz.mjs — 图谱降采样 → data/viz.json
-- buildSemanticGraph.mjs — 语义关系合并为有向图 → data/semantic-graph.json
+- buildSemanticGraph.mjs — 语义关系合并为有向图 + 二次补翻 → data/semantic-graph.json
 - export-ontology.mjs — 导出本体 Schema → data/ontology.json
+- make-geoseed.mjs — 地理坐标种子 + 匹配图谱 → data/geo-nodes.json
 - checkAlign2.mjs — 校验语义关系与图谱的实体对齐率
 
 可视化页面（浏览器打开）：
@@ -52,24 +54,29 @@
 - ontology.html — 本体 Schema（类层级 + 关系矩阵 + 公理）
 - axioms.html — 公理合规检测（维度扣分 + 违规明细）
 - trace.html — 溯源链（实体→关系→源文章→MinIO 原文）
+- map.html — 地理可视化（MapLibre 3D 地球，点击实体飞到坐标）
 
 ## 用法
 
     npm install
     copy .env.example .env
 
-    npx tsx src/buildGraph.ts            建共现图谱
+    npx tsx src/buildGraph.ts            建共现图谱（含 C1 纠偏）
     node make-viz.mjs                    降采样
-    npx tsx src/extractRelations.ts 100  语义关系抽取（试点 100 篇）
-    node buildSemanticGraph.mjs          合并有向图
+    npx tsx src/extractRelations.ts 600 0        语义关系抽取（首批600篇）
+    npx tsx src/extractRelations.ts 600 600 append   追加下一批
+    node buildSemanticGraph.mjs          合并有向图 + 补翻
     npx tsx src/evaluate.ts              五维度质量评价
     npx tsx export-ontology.mjs          导出本体 Schema
     npx tsx src/validateAxioms.ts        公理合规检测
     npx tsx src/traceability.ts          构建溯源链
+    node make-geoseed.mjs                生成地理坐标数据
 
     npx serve .
 
-起本地服务器后，浏览器打开六个 html 页面查看。前提：redroom 的 MinIO 和 MySQL 容器需运行。
+起本地服务器后，浏览器打开七个 html 页面查看。前提：redroom 的 MinIO 和 MySQL 容器需运行。
+
+分批抽取说明：extractRelations.ts 接受 <篇数> <偏移量> <append> 三个参数，可分批抽取全量文章，append 模式追加不覆盖。
 
 ## 质量评价体系
 
@@ -89,12 +96,16 @@
 
 - 类层级：21 个类，顶层含 Country（独立）/ Person / Organization / Location / Facility / Event / SourceArticle
 - 关系类型：14 种，分冲突 / 合作 / 外交 / 结构四组，带定义域、值域、基数、反向语义
-- 公理约束：7 条，每条绑定质量维度并定义扣分规则
+- 公理约束：7 条，每条绑定质量维度并定义扣分规则（C1/C3/C5/C7 可自动检测）
 
-## 三个核心特性
+## 核心特性
 
-1. 本体公理驱动评价 — 质量指标从本体公理自动推导（validateAxioms.ts），改公理评价自动变，实现"Schema 规则自动计算质量指标"。当前 4 条公理可自动检测（C1/C3/C5/C7）。
+1. 本体公理驱动评价 — 质量指标从本体公理自动推导（validateAxioms.ts），改公理评价自动变。
 
-2. 五维度可量化评价 — 每个指标有算法、有问题样本佐证，能揭示真实数据质量问题（如国家类型错配、实体关系矛盾）。
+2. 公理 C1 驱动数据改进闭环 — 评价发现国家类型错配 → 公理 C1 定义国家独立性 → 建图管线自动纠偏 → 重新评价验证。纠偏做进管线，对新抓数据自动生效。
 
-3. 情报完整可溯源 — 每条语义关系可追溯到源文章，并定位到 MinIO 中按主题归档的原始数据，实现情报可验证、可审计。
+3. 五维度可量化评价 — 每个指标有算法、有问题样本佐证。
+
+4. 情报完整可溯源 — 每条语义关系可追溯到源文章，并定位到 MinIO 原始数据。
+
+5. 基于本体的地理可视化 — 本体实体按地理坐标呈现在 MapLibre 3D 地球上，点击实体地球飞到对应坐标。
