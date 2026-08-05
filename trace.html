@@ -22,6 +22,8 @@
     .arrow { color:#6e7681; }
     .src { margin-top:10px; padding-top:10px; border-top:1px solid #21262d; font-size:12px; color:#8b949e; }
     .src-line { margin:3px 0; display:flex; gap:8px; align-items:center; }
+    .trace-img { max-width:180px; max-height:110px; border-radius:6px; border:1px solid #30363d; margin-top:4px; cursor:pointer; object-fit:cover; }
+    .trace-img:hover { border-color:#58a6ff; }
     .src-icon { color:#6e7681; }
     .minio { color:#3fb950; font-family:monospace; font-size:11px; }
     .conf { font-size:10px; color:#8b949e; margin-left:auto; }
@@ -50,7 +52,8 @@
         <div class="stat"><div class="num">${rep.totalTraces}</div><div class="lbl">溯源记录</div></div>
         <div class="stat"><div class="num">${rep.sourceCompleteness}%</div><div class="lbl">可溯源到文章</div></div>
         <div class="stat"><div class="num">${rep.minioCompleteness}%</div><div class="lbl">可定位 MinIO 原文</div></div>
-        <div class="stat"><div class="num">${new Set(rep.traces.map(t=>t.source.articleId)).size}</div><div class="lbl">涉及源文章</div></div>`;
+        <div class="stat"><div class="num">${new Set(rep.traces.map(t=>t.source.articleId)).size}</div><div class="lbl">涉及源文章</div></div>
+        <div class="stat"><div class="num">${rep.imageCompleteness ?? 0}%</div><div class="lbl">关联配图（多模态）</div></div>`;
 
       render(allTraces);
     }).catch(e=>{ document.getElementById("sub").textContent="加载失败："+e.message; });
@@ -72,6 +75,7 @@
             <div class="src-line"><span class="src-icon">📄</span> 源文章 ${t.source.articleId}：${t.source.title??'?'}</div>
             <div class="src-line"><span class="src-icon">🗄</span> <span class="minio">${t.source.minioPath??'（未回填）'}</span>
               ${t.source.url?`<a href="${t.source.url}" target="_blank">查看原文 ↗</a>`:''}</div>
+            ${t.source.imageUrl?`<div class="src-line"><span class="src-icon">🖼</span> <img src="${t.source.imageUrl}" class="trace-img" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${t.source.imageUrl}','_blank')" /></div>`:''}
           </div>
         </div>`;
       }).join("");
