@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>多模态检索 — ontology-graph</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:"Microsoft YaHei",sans-serif; background:#0d1117; color:#e6edf3; padding:20px; }
+    h1 { font-size:20px; margin-bottom:4px; }
+    .sub { color:#8b949e; font-size:13px; margin-bottom:16px; }
+    .searchbar { display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+    #q { flex:1; min-width:240px; padding:10px 14px; background:#161b22; border:1px solid #30363d; border-radius:8px; color:#e6edf3; font-size:14px; }
+    .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px; }
+    .chip { padding:4px 12px; background:#161b22; border:1px solid #30363d; border-radius:14px; font-size:12px; cursor:pointer; color:#8b949e; }
+    .chip:hover, .chip.active { background:#1f6feb33; border-color:#1f6feb; color:#58a6ff; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:14px; }
+    .card { background:#161b22; border:1px solid #30363d; border-radius:10px; overflow:hidden; cursor:pointer; transition:border-color .15s; }
+    .card:hover { border-color:#58a6ff; }
+    .card img { width:100%; height:150px; object-fit:cover; display:block; background:#0d1117; }
+    .card .info { padding:10px 12px; }
+    .card .t { font-size:12px; line-height:1.4; max-height:50px; overflow:hidden; }
+    .card .tags { margin-top:6px; display:flex; flex-wrap:wrap; gap:4px; }
+    .card .tag { font-size:10px; padding:1px 6px; background:#1f6feb1a; color:#58a6ff; border-radius:4px; }
+    .card .path { font-size:9px; color:#3fb950; font-family:monospace; margin-top:4px; }
+    #count { color:#8b949e; font-size:12px; margin-bottom:10px; }
+    #modal { display:none; position:fixed; inset:0; background:#000c; z-index:99; align-items:center; justify-content:center; padding:40px; }
+    #modal img { max-width:90%; max-height:80vh; border-radius:8px; }
+  </style>
+</head>
+<body>
+  <h1>🔍 多模态检索</h1>
+  <div class="sub" id="sub">加载中…</div>
+
+  <div class="searchbar">
+    <input id="q" placeholder="按实体检索图片…（如 伊朗、以色列、特朗普）" />
+  </div>
+  <div class="chips" id="chips"></div>
+  <div id="count"></div>
+  <div class="grid" id="grid"></div>
+  <div id="modal" onclick="this.style.display='none'"><img id="modalImg" /></div>
+
+  <script>
+    let allMedia = [];
+    const HOT_ENTITIES = ["伊朗","以色列","美国","特朗普","加沙","埃及","俄罗斯","乌克兰","沙特阿拉伯","哈马斯"];
+
+    fetch("data/media.json").then(r=>r.json()).then(data => {
+      allMedia = data;
+      document.getElementById("sub").textContent = `${data.length} 条带图媒体资源 · 输入实体名检索相关图像（文本→图像跨模态检索）`;
+
+      // 热门实体快捷 chips
+      const chipsEl = document.getElementById("chips");
+      chipsEl.innerHTML = `<span class="chip active" data-e="">全部</span>` +
+        HOT_ENTITIES.map(e => `<span class="chip" data-e="${e}">${e}</span>`).join("");
+      chipsEl.querySelectorAll(".chip").forEach(chip => {
+        chip.onclick = () => {
+          chipsEl.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+          chip.classList.add("active");
+          document.getElementById("q").value = chip.dataset.e;
+          filter(chip.dataset.e);
+        };
+      });
+
+      render(allMedia.slice(0, 60));
+      document.getElementById("count").textContent = `显示前 60 / 共 ${allMedia.length} 条`;
+    }).catch(e => { document.getElementById("sub").textContent = "加载失败："+e.message; });
+
+    function filter(q) {
+      q = q.trim();
+      if (!q) { render(allMedia.slice(0,60)); document.getElementById("count").textContent = `显示前 60 / 共 ${allMedia.length} 条`; return; }
+      const res = allMedia.filter(m =>
+        m.entities.some(e => e.includes(q)) ||
+        (m.title && m.title.includes(q)) ||
+        m.topics.some(t => t.includes(q)) ||
+        (m.country && m.country.includes(q))
+      );
+      render(res.slice(0, 120));
+      document.getElementById("count").textContent = `找到 ${res.length} 条相关图像${res.length>120?'（显示前120）':''}`;
+    }
+
+    function render(list) {
+      document.getElementById("grid").innerHTML = list.map(m => `
+        <div class="card" onclick="showImg('${m.imageUrl.replace(/'/g,"\\'")}')">
+          <img src="${m.imageUrl}" loading="lazy" onerror="this.parentElement.style.display='none'" />
+          <div class="info">
+            <div class="t">${m.title || '(无标题)'}</div>
+            <div class="tags">${m.entities.slice(0,4).map(e=>`<span class="tag">${e}</span>`).join("")}</div>
+            ${m.minioPath?`<div class="path">${m.minioPath}</div>`:''}
+          </div>
+        </div>`).join("");
+    }
+
+    function showImg(url){ document.getElementById("modalImg").src = url; document.getElementById("modal").style.display = "flex"; }
+
+    document.getElementById("q").addEventListener("input", e => {
+      document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+      filter(e.target.value);
+    });
+  </script>
+</body>
+</html>

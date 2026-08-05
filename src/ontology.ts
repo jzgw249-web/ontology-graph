@@ -100,6 +100,13 @@ export const CLASSES: ClassDef[] = [
     { name: "storageKey", zh: "MinIO存储键", type: "string", required: false, note: "打通MinIO原始数据" },
     { name: "topics", zh: "主题", type: "string", required: false },
   ]},
+
+  // ── MediaResource 多模态媒体资源类 ──
+  { id: "MediaResource", zh: "媒体资源", parent: "Entity", properties: [
+    { name: "url", zh: "资源链接", type: "string", required: true },
+    { name: "mediaType", zh: "模态类型", type: "enum", required: true, enumValues: ["image","video","audio"] },
+    { name: "sourceArticleId", zh: "所属文章", type: "ref", required: true, note: "多模态：关联到 SourceArticle" },
+  ]},
 ];
 
 // ══════════════ 二、关系类型（含反向、基数、值域）══════════════
@@ -136,6 +143,7 @@ export const RELATIONS: RelationDef[] = [
   // 溯源关系
   { id:"源自", zh:"源自", group:"structure", domain:["Entity"], range:["SourceArticle"], inverse:"衍生出", cardinality:"N:N", symmetric:false },
   { id:"报道", zh:"报道", group:"structure", domain:["SourceArticle"], range:["Event"], inverse:"被报道", cardinality:"N:N", symmetric:false },
+  { id:"关联媒体", zh:"关联媒体", group:"structure", domain:["SourceArticle"], range:["MediaResource"], inverse:"媒体来源", cardinality:"N:N", symmetric:false },
 ];
 
 // ══════════════ 三、公理（约束规则，绑定质量维度）══════════════
