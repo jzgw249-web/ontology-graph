@@ -41,7 +41,16 @@
 
   <script>
     let allMedia = [];
+    const reverseMap = new Map();
     const HOT_ENTITIES = ["伊朗","以色列","美国","特朗普","加沙","埃及","俄罗斯","乌克兰","沙特阿拉伯","哈马斯"];
+
+    fetch("data/multilang.json").then(r=>r.json()).then(ml => {
+      for (const [zh, l] of Object.entries(ml)) {
+        if (l.en) reverseMap.set(l.en.toLowerCase(), zh);
+        if (l.ar) reverseMap.set(l.ar, zh);
+        reverseMap.set(zh, zh);
+      }
+    }).catch(function(){});
 
     fetch("data/media.json").then(r=>r.json()).then(data => {
       allMedia = data;
@@ -66,12 +75,13 @@
 
     function filter(q) {
       q = q.trim();
+      const qz = reverseMap.get(q.toLowerCase()) || reverseMap.get(q) || q;
       if (!q) { render(allMedia.slice(0,60)); document.getElementById("count").textContent = `显示前 60 / 共 ${allMedia.length} 条`; return; }
       const res = allMedia.filter(m =>
-        m.entities.some(e => e.includes(q)) ||
-        (m.title && m.title.includes(q)) ||
-        m.topics.some(t => t.includes(q)) ||
-        (m.country && m.country.includes(q))
+        m.entities.some(e => e.includes(qz) || e.toLowerCase().includes(q.toLowerCase())) ||
+        (m.title && (m.title.includes(qz) || m.title.toLowerCase().includes(q.toLowerCase()))) ||
+        m.topics.some(t => t.includes(qz)) ||
+        (m.country && m.country.toLowerCase().includes(q.toLowerCase()))
       );
       render(res.slice(0, 120));
       document.getElementById("count").textContent = `找到 ${res.length} 条相关图像${res.length>120?'（显示前120）':''}`;
