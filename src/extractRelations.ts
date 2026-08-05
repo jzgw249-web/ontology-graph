@@ -83,6 +83,8 @@ async function extractFromArticle(
 
 async function main() {
   const LIMIT = Number(process.argv[2] || 100);
+  const OFFSET = Number(process.argv[3] || 0);
+  const APPEND = process.argv[4] === "append";
   const db = await connectDb();
 
   const [aliasRows] = await db.execute<any[]>(
@@ -99,7 +101,7 @@ async function main() {
   const [rows] = await db.execute<any[]>(
     `SELECT id, title, content, entitiesJson FROM articles
      WHERE CHAR_LENGTH(content) > 100 AND entitiesJson IS NOT NULL
-     ORDER BY id DESC LIMIT ${LIMIT}`
+     ORDER BY id DESC LIMIT ${LIMIT} OFFSET ${OFFSET}`
   );
   console.log(`抽取 ${rows.length} 篇文章的语义关系...\n`);
 
@@ -127,7 +129,15 @@ async function main() {
 
   // 输出
   fs.mkdirSync("data", { recursive: true });
-  fs.writeFileSync("data/relations.json", JSON.stringify(allTriples, null, 2), "utf8");
+  let finalTriples = allTriples;
+  if (APPEND) {
+    try {
+      const existing = JSON.parse(fs.readFileSync("data/relations.json", "utf8"));
+      finalTriples = [...existing, ...allTriples];
+      console.log(`追加模式：已有 ${existing.length} + 新增 ${allTriples.length} = ${finalTriples.length}`);
+    } catch { console.log("追加模式：无已有文件，从头写"); }
+  }
+  fs.writeFileSync("data/relations.json", JSON.stringify(finalTriples, null, 2), "utf8");
 
   // 统计
   const byType: Record<string, number> = {};
