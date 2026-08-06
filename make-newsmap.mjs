@@ -61,6 +61,11 @@ for (const r of rows) {
   let topics = [];
   try { topics = JSON.parse(r.topics ?? "[]"); } catch {}
 
+  // 事件类型来自 MinIO 存储目录前缀（topics 字段实际为空，storageKey 是可靠来源）
+  const eventType = r.storageKey && r.storageKey.includes("/")
+    ? r.storageKey.split("/")[0]
+    : "uncategorized";
+
   locationCounts[point.name] = (locationCounts[point.name] || 0) + 1;
 
   items.push({
@@ -72,6 +77,7 @@ for (const r of rows) {
     locationName: point.name,
     imageUrl: r.imageUrl || null,
     topics,
+    eventType,
     url: r.url,
     minioPath: r.storageKey ? `redroom-raw/${r.storageKey}` : null,
   });
@@ -100,12 +106,17 @@ fs.mkdirSync("data", { recursive: true });
 fs.writeFileSync("data/newsmap.json", JSON.stringify(items, null, 2), "utf8");
 
 const top10 = Object.entries(locationCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+const typeCounts = {};
+items.forEach(n => typeCounts[n.eventType] = (typeCounts[n.eventType] || 0) + 1);
+
 console.log(`\n=== 新闻地图生成完成 ===`);
 console.log(`查询文章总数: ${rows.length}`);
 console.log(`成功匹配坐标: ${matched}`);
 console.log(`跳过（无匹配地点）: ${skipped}`);
 console.log(`按地点分组 Top 10:`);
 for (const [name, count] of top10) console.log(`  ${name} — ${count} 条`);
+console.log(`按事件类型分组:`);
+for (const [type, count] of Object.entries(typeCounts).sort((a, b) => b[1] - a[1])) console.log(`  ${type} — ${count} 条`);
 console.log(`输出: data/newsmap.json`);
 
 await db.end();

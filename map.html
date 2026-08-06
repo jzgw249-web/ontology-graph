@@ -17,15 +17,19 @@
     .search { width:100%; padding:9px 12px; margin-top:12px; background:#161b22; border:1px solid #30363d; border-radius:8px; color:#e6edf3; font-size:13px; }
     .search:focus { outline:none; border-color:#58a6ff; }
 
+    #legend { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+    .legend-item { display:flex; align-items:center; gap:4px; padding:3px 8px; border-radius:20px; font-size:11px; cursor:pointer; border:1px solid transparent; opacity:.55; transition:opacity .15s, border-color .15s; }
+    .legend-item.on { opacity:1; }
+    .legend-item .dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+
     #list { flex:1; overflow-y:auto; padding:10px; }
-    .card { background:#161b22; border:1px solid #30363d; border-radius:10px; padding:12px 14px; margin-bottom:8px; cursor:pointer; transition:border-color .15s; }
+    .card { background:#161b22; border:1px solid #30363d; border-left-width:3px; border-radius:10px; padding:12px 14px; margin-bottom:8px; cursor:pointer; transition:border-color .15s; }
     .card:hover { border-color:#58a6ff; }
     .card.active { border-color:#58a6ff; background:#161b2caa; }
     .card-title { font-size:13.5px; line-height:1.4; font-weight:600; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
     .card-meta { display:flex; align-items:center; gap:6px; margin-top:8px; font-size:11.5px; color:#8b949e; flex-wrap:wrap; }
     .card-meta .loc { color:#58a6ff; }
-    .card-tags { display:flex; gap:5px; margin-top:8px; flex-wrap:wrap; }
-    .tag { padding:2px 8px; background:#1f6feb22; color:#58a6ff; border-radius:4px; font-size:10.5px; }
+    .type-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:4px; font-size:10.5px; font-weight:600; margin-top:8px; }
     .empty { color:#8b949e; font-size:13px; text-align:center; padding:40px 10px; }
 
     #map { flex:1; height:100%; }
@@ -34,6 +38,7 @@
     .mm-popup .p-title { font-size:13px; font-weight:600; line-height:1.4; margin-bottom:6px; }
     .mm-popup .p-time { font-size:11px; color:#57606a; }
     .mm-popup .p-loc { font-size:11px; color:#0969da; margin-top:2px; }
+    .mm-popup .p-type { font-size:10.5px; font-weight:600; display:inline-block; padding:1px 7px; border-radius:4px; margin-bottom:6px; }
     .mm-popup img { width:100%; border-radius:4px; margin-top:6px; display:block; }
     .maplibregl-popup-content { border-radius:8px; padding:10px 12px; }
   </style>
@@ -45,6 +50,7 @@
         <h1>📍 新闻事件地图</h1>
         <div class="sub" id="stats">加载中…</div>
         <input class="search" id="search" placeholder="搜索标题、地点或主题…" />
+        <div id="legend"></div>
       </div>
       <div id="list"></div>
     </div>
@@ -52,8 +58,23 @@
   </div>
 
   <script>
+    // 事件类型标识，配色与 redroom 项目 LiveTab 保持一致，同类型使用同一颜色+图标
+    const TOPIC_STYLE = {
+      "war-conflict":  { color:"#ef4444", icon:"⚔", label:"战争冲突" },
+      "economy":       { color:"#f59e0b", icon:"📈", label:"经济" },
+      "politics":      { color:"#8b5cf6", icon:"🏛", label:"政治" },
+      "technology":    { color:"#06b6d4", icon:"💻", label:"科技" },
+      "energy":        { color:"#f97316", icon:"⚡", label:"能源" },
+      "diplomacy":     { color:"#10b981", icon:"🤝", label:"外交" },
+      "security":      { color:"#ec4899", icon:"🛡", label:"安全" },
+      "humanitarian":  { color:"#84cc16", icon:"❤", label:"人道主义" },
+      "uncategorized": { color:"#22d3ee", icon:"●", label:"综合" },
+    };
+    function styleFor(type) { return TOPIC_STYLE[type] || TOPIC_STYLE.uncategorized; }
+
     let allNews = [];
     let activeId = null;
+    let activeTypes = new Set(Object.keys(TOPIC_STYLE)); // 当前启用的类型（图例可点击筛选）
     const markers = new Map(); // articleId -> { marker, popup }
 
     const map = new maplibregl.Map({
@@ -89,11 +110,16 @@
       document.getElementById("stats").textContent = `近7天 ${data.length} 条新闻事件 · ${locCount} 个地点`;
 
       for (const n of data) {
+        const st = styleFor(n.eventType);
         const el = document.createElement("div");
-        el.style.cssText = "width:14px;height:14px;border-radius:50%;background:#58a6ff;border:2px solid #0d1117;box-shadow:0 0 6px #58a6ffaa;cursor:pointer;";
+        el.className = "marker-pin";
+        el.style.cssText = `width:20px;height:20px;border-radius:50%;background:${st.color};border:2px solid #0d1117;box-shadow:0 0 6px ${st.color}aa;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;line-height:1;`;
+        el.textContent = st.icon;
+        el.title = st.label;
 
-        const popup = new maplibregl.Popup({ offset:14, closeButton:false, closeOnClick:false }).setHTML(`
+        const popup = new maplibregl.Popup({ offset:16, closeButton:false, closeOnClick:false }).setHTML(`
           <div class="mm-popup">
+            <div class="p-type" style="background:${st.color}22;color:${st.color}">${st.icon} ${st.label}</div>
             <div class="p-title">${escapeHtml(n.title)}</div>
             <div class="p-time">🕒 ${formatExact(n.publishedAt)}</div>
             <div class="p-loc">📍 ${escapeHtml(n.locationName)}</div>
@@ -112,7 +138,9 @@
         markers.set(n.articleId, { marker, popup });
       }
 
-      render(allNews);
+      renderLegend();
+      applyMarkerVisibility();
+      render(currentFiltered());
     }).catch(e => {
       document.getElementById("stats").textContent = "加载失败：" + e.message;
     });
@@ -121,19 +149,47 @@
       return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
     }
 
+    function renderLegend() {
+      const el = document.getElementById("legend");
+      el.innerHTML = Object.entries(TOPIC_STYLE).map(([type, st]) => `
+        <div class="legend-item${activeTypes.has(type) ? " on" : ""}" data-type="${type}" style="background:${st.color}22;border-color:${activeTypes.has(type) ? st.color : "transparent"};color:${st.color}">
+          <span class="dot" style="background:${st.color}"></span>${st.icon} ${st.label}
+        </div>`).join("");
+      el.querySelectorAll(".legend-item").forEach(item => {
+        item.addEventListener("click", () => {
+          const type = item.dataset.type;
+          if (activeTypes.has(type)) activeTypes.delete(type); else activeTypes.add(type);
+          renderLegend();
+          applyMarkerVisibility();
+          render(currentFiltered());
+        });
+      });
+    }
+
+    function applyMarkerVisibility() {
+      markers.forEach((entry, articleId) => {
+        const n = allNews.find(x => x.articleId === articleId);
+        const show = n && activeTypes.has(n.eventType);
+        entry.marker.getElement().style.display = show ? "" : "none";
+      });
+    }
+
     function render(list) {
       const el = document.getElementById("list");
       if (!list.length) { el.innerHTML = `<div class="empty">没有匹配的新闻</div>`; return; }
-      el.innerHTML = list.map(n => `
-        <div class="card${n.articleId === activeId ? " active" : ""}" data-id="${n.articleId}">
+      el.innerHTML = list.map(n => {
+        const st = styleFor(n.eventType);
+        return `
+        <div class="card${n.articleId === activeId ? " active" : ""}" data-id="${n.articleId}" style="border-left-color:${st.color}">
           <div class="card-title">${escapeHtml(n.title)}</div>
           <div class="card-meta">
             <span>${formatTime(n.publishedAt)}</span>
             <span>·</span>
             <span class="loc">📍 ${escapeHtml(n.locationName)}</span>
           </div>
-          ${n.topics && n.topics.length ? `<div class="card-tags">${n.topics.slice(0,4).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join("")}</div>` : ""}
-        </div>`).join("");
+          <div class="type-badge" style="background:${st.color}22;color:${st.color}">${st.icon} ${st.label}</div>
+        </div>`;
+      }).join("");
 
       el.querySelectorAll(".card").forEach(card => {
         card.addEventListener("click", () => selectNews(Number(card.dataset.id)));
@@ -155,12 +211,14 @@
 
     let currentQuery = "";
     function currentFiltered() {
-      if (!currentQuery) return allNews;
-      const q = currentQuery;
-      return allNews.filter(n =>
-        n.title.toLowerCase().includes(q) ||
-        n.locationName.toLowerCase().includes(q) ||
-        (n.topics || []).some(t => t.toLowerCase().includes(q)));
+      return allNews.filter(n => {
+        if (!activeTypes.has(n.eventType)) return false;
+        if (!currentQuery) return true;
+        const st = styleFor(n.eventType);
+        return n.title.toLowerCase().includes(currentQuery) ||
+          n.locationName.toLowerCase().includes(currentQuery) ||
+          st.label.toLowerCase().includes(currentQuery);
+      });
     }
 
     document.getElementById("search").addEventListener("input", e => {
