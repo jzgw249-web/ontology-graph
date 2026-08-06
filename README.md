@@ -1,17 +1,17 @@
 # ontology-graph
 
-地缘情报多模态知识工程系统：从 redroom 采集的原始数据出发，构建实体关系图谱、抽取语义关系、定义领域本体、建立可量化的质量评价体系，实现情报完整可溯源、基于本体的地理可视化，以及文本-图像多模态检索。
+地缘情报多模态多语种知识工程系统：从 redroom 采集的原始数据出发，构建实体关系图谱、抽取语义关系、定义领域本体、建立可量化的质量评价体系，实现情报完整可溯源、基于本体的地理可视化，以及文本-图像多模态、中英阿多语种检索。
 
 ## 数据流
 
-    redroom 采集 → MinIO 按主题归档 → 共现图谱 → 语义关系 → 本体 Schema → 质量评价 → 溯源链 → 地理可视化 → 多模态检索
+    redroom 采集 → MinIO 按主题归档 → 共现图谱 → 语义关系 → 本体 Schema → 质量评价 → 溯源链 → 地理可视化 → 多模态多语种检索
 
 两个项目通过 MinIO / MySQL 解耦：redroom 只写数据，本项目只读。
 
 ## 数据来源
 
 - MinIO（redroom-raw bucket）— 按八大主题分目录的原始文章 JSON
-- MySQL（redroom 库）— entitiesJson 实体字段、entity_aliases 归一化表、articles 表（含 storageKey 指向 MinIO、imageUrl 配图）
+- MySQL（redroom 库）— entitiesJson 实体字段、entity_aliases 归一化表（含中/英/阿三语名）、articles 表（含 storageKey、imageUrl）
 
 ## 完整阶段
 
@@ -20,11 +20,11 @@
 | 1 | 实体共现图谱 | graph.html |
 | 2 | 五维度质量评价 | quality.html |
 | 3 | LLM 语义关系抽取（全量） | semantic.html |
-| 4 | 本体 Schema 定义（含多模态 MediaResource 类） | ontology.html |
+| 4 | 本体 Schema（多模态 + 多语种） | ontology.html |
 | 4b | 本体公理合规检测（本体驱动评价 + C1 纠偏） | axioms.html |
 | 5 | 情报溯源链（多模态：关联新闻配图） | trace.html |
 | 6 | 本体地理可视化（MapLibre） | map.html |
-| 7 | 多模态检索（文本→图像） | media.html |
+| 7 | 多模态多语种检索（文本→图像，中/英/阿） | media.html |
 
 ## 目录结构
 
@@ -35,7 +35,7 @@
 - buildGraph.ts — 构建共现图谱 + 公理 C1 国家类型纠偏 → data/graph.json
 - evaluate.ts — 五维度质量评价 → data/quality-report.json
 - extractRelations.ts — LLM 语义关系抽取（12 类关系，支持分批）→ data/relations.json
-- ontology.ts — 地缘情报本体 Schema（22 类 / 15 关系 / 7 公理，含多模态 MediaResource）
+- ontology.ts — 地缘情报本体 Schema（22 类 / 15 关系 / 7 公理，含多模态 MediaResource + 中英阿三语标签）
 - validateAxioms.ts — 本体公理合规检测 → data/axiom-report.json
 - traceability.ts — 溯源链构建（关系→文章→MinIO→配图）→ data/traceability.json
 
@@ -43,9 +43,10 @@
 
 - make-viz.mjs — 图谱降采样 → data/viz.json
 - buildSemanticGraph.mjs — 语义关系合并为有向图 + 二次补翻 → data/semantic-graph.json
-- export-ontology.mjs — 导出本体 Schema → data/ontology.json
+- export-ontology.mjs — 导出本体 Schema（含支持语言）→ data/ontology.json
 - make-geoseed.mjs — 地理坐标种子 + 匹配图谱 → data/geo-nodes.json
 - make-media.mjs — 多模态媒体资源提取（带图文章）→ data/media.json
+- make-multilang.mjs — 中英阿三语标签生成 → data/multilang.json
 - checkAlign2.mjs — 校验语义关系与图谱的实体对齐率
 
 可视化页面（浏览器打开）：
@@ -53,11 +54,11 @@
 - graph.html — 共现图谱（vis-network）
 - semantic.html — 语义关系有向图
 - quality.html — 质量评价仪表盘（雷达图）
-- ontology.html — 本体 Schema（类层级 + 关系矩阵 + 公理）
+- ontology.html — 本体 Schema（类层级 + 关系矩阵 + 公理 + 多语种支持）
 - axioms.html — 公理合规检测（维度扣分 + 违规明细）
 - trace.html — 溯源链（实体→关系→源文章→MinIO 原文→配图）
 - map.html — 地理可视化（MapLibre 3D 地球，点击实体飞到坐标）
-- media.html — 多模态检索（按实体检索相关新闻图像）
+- media.html — 多模态多语种检索（中/英/阿检索相关新闻图像）
 
 ## 用法
 
@@ -75,6 +76,7 @@
     npx tsx src/traceability.ts          构建溯源链（含配图）
     node make-geoseed.mjs                生成地理坐标数据
     node make-media.mjs                  提取多模态媒体资源
+    node make-multilang.mjs              生成中英阿三语标签
 
     npx serve .
 
@@ -96,11 +98,12 @@
 
 ## 本体 Schema
 
-从图谱数据抽象的地缘情报多模态本体：
+从图谱数据抽象的地缘情报多模态多语种本体：
 
 - 类层级：22 个类，顶层含 Country（独立）/ Person / Organization / Location / Facility / Event / SourceArticle / MediaResource（多模态媒体资源）
 - 关系类型：15 种，分冲突 / 合作 / 外交 / 结构四组，含"关联媒体"多模态关系
 - 公理约束：7 条，每条绑定质量维度并定义扣分规则（C1/C3/C5/C7 可自动检测）
+- 多语种标签：每个实体提供中文 / 英语 / 阿拉伯语三语标签（覆盖 100% / 100% / 41%），支持跨语言检索
 
 ## 核心特性
 
@@ -115,3 +118,5 @@
 5. 基于本体的地理可视化 — 本体实体按坐标呈现在 MapLibre 3D 地球上，点击飞到对应位置。
 
 6. 多模态知识图谱 — 本体建模媒体资源（MediaResource），情报关系关联新闻配图，支持文本→图像的跨模态检索。
+
+7. 多语种知识图谱 — 本体为每个实体提供中英阿三语标签，支持输入任一语言检索同一实体（跨语言检索）。
