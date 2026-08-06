@@ -40,6 +40,7 @@
     .mm-popup .p-loc { font-size:11px; color:#0969da; margin-top:2px; }
     .mm-popup .p-type { font-size:10.5px; font-weight:600; display:inline-block; padding:1px 7px; border-radius:4px; margin-bottom:6px; }
     .mm-popup img { width:100%; border-radius:4px; margin-top:6px; display:block; }
+    .mm-popup .p-link { font-size:11px; color:#0969da; margin-top:6px; font-weight:600; }
     .maplibregl-popup-content { border-radius:8px; padding:10px 12px; }
   </style>
 </head>
@@ -124,6 +125,7 @@
             <div class="p-time">🕒 ${formatExact(n.publishedAt)}</div>
             <div class="p-loc">📍 ${escapeHtml(n.locationName)}</div>
             ${n.imageUrl ? `<img src="${n.imageUrl}" loading="lazy" onerror="this.remove()" />` : ""}
+            ${n.url ? `<div class="p-link">查看原文 ↗</div>` : ""}
           </div>`);
 
         const marker = new maplibregl.Marker({ element: el })
@@ -133,7 +135,11 @@
 
         el.addEventListener("mouseenter", () => marker.togglePopup());
         el.addEventListener("mouseleave", () => { if (popup.isOpen()) marker.togglePopup(); });
-        el.addEventListener("click", () => selectNews(n.articleId));
+        el.addEventListener("click", () => {
+          activeId = n.articleId;
+          render(currentFiltered());
+          if (n.url) window.open(n.url, "_blank", "noopener");
+        });
 
         markers.set(n.articleId, { marker, popup });
       }
