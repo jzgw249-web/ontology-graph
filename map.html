@@ -1,38 +1,172 @@
-import fs from "node:fs";
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>新闻事件地图</title>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { height:100%; font-family:"Microsoft YaHei",sans-serif; background:#0d1117; color:#e6edf3; }
+    #app { display:flex; height:100vh; }
 
-// 地理实体种子坐标 [经度, 纬度]（国家用中心点/首都，城市用实际坐标）
-const GEO = {
-  "伊朗": [53.688, 32.427], "美国": [-98.583, 39.833], "以色列": [34.851, 31.046],
-  "埃及": [30.802, 26.820], "沙特阿拉伯": [45.079, 23.885], "西班牙": [-3.749, 40.463],
-  "俄罗斯": [105.318, 61.524], "伊拉克": [43.679, 33.223], "阿富汗": [67.709, 33.939],
-  "土耳其": [35.243, 38.963], "黎巴嫩": [35.862, 33.854], "乌克兰": [31.165, 48.379],
-  "巴基斯坦": [69.345, 30.375], "约旦": [36.238, 30.585], "英国": [-3.436, 55.378],
-  "法国": [2.213, 46.227], "摩洛哥": [-7.092, 31.791], "也门": [48.516, 15.552],
-  "利比亚": [17.228, 26.335], "印度": [78.962, 20.593], "叙利亚": [38.996, 34.802],
-  "科威特": [47.481, 29.311], "阿根廷": [-63.616, -38.416], "阿曼": [55.923, 21.512],
-  "苏丹": [30.217, 12.862], "德国": [10.451, 51.165], "日本": [138.252, 36.204],
-  "中国": [104.195, 35.861], "卡塔尔": [51.183, 25.354], "巴勒斯坦": [35.233, 31.952],
-  "巴林": [50.637, 26.066], "意大利": [12.567, 41.871], "欧盟": [10.451, 51.165],
-  "欧洲": [15.255, 54.526],
-  "德黑兰": [51.389, 35.689], "华盛顿": [-77.037, 38.907], "加沙": [34.466, 31.502],
-  "加沙地带": [34.308, 31.354], "中东": [42.000, 29.000], "休达": [-5.320, 35.889],
-  "纽约": [-74.006, 40.713], "约旦河西岸": [35.300, 31.900], "开罗": [31.236, 30.044],
-  "伦敦": [-0.128, 51.507], "基辅": [30.523, 50.450], "伊斯兰堡": [73.084, 33.684],
-  "马德里": [-3.703, 40.417], "的黎波里": [13.180, 32.887],
-  "霍尔木兹海峡": [56.250, 26.567], "红海": [38.000, 20.000],
-};
+    #sidebar { width:400px; min-width:400px; height:100%; display:flex; flex-direction:column; border-right:1px solid #30363d; background:#0d1117; }
+    #sidebar-header { padding:18px 18px 12px; border-bottom:1px solid #21262d; }
+    h1 { font-size:19px; }
+    .sub { color:#8b949e; font-size:12px; margin-top:4px; }
+    .search { width:100%; padding:9px 12px; margin-top:12px; background:#161b22; border:1px solid #30363d; border-radius:8px; color:#e6edf3; font-size:13px; }
+    .search:focus { outline:none; border-color:#58a6ff; }
 
-fs.mkdirSync("data", { recursive: true });
-fs.writeFileSync("data/geo-seed.json", JSON.stringify(GEO, null, 2), "utf8");
-console.log(`✓ 种子坐标 ${Object.keys(GEO).length} 个 → data/geo-seed.json`);
+    #list { flex:1; overflow-y:auto; padding:10px; }
+    .card { background:#161b22; border:1px solid #30363d; border-radius:10px; padding:12px 14px; margin-bottom:8px; cursor:pointer; transition:border-color .15s; }
+    .card:hover { border-color:#58a6ff; }
+    .card.active { border-color:#58a6ff; background:#161b2caa; }
+    .card-title { font-size:13.5px; line-height:1.4; font-weight:600; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .card-meta { display:flex; align-items:center; gap:6px; margin-top:8px; font-size:11.5px; color:#8b949e; flex-wrap:wrap; }
+    .card-meta .loc { color:#58a6ff; }
+    .card-tags { display:flex; gap:5px; margin-top:8px; flex-wrap:wrap; }
+    .tag { padding:2px 8px; background:#1f6feb22; color:#58a6ff; border-radius:4px; font-size:10.5px; }
+    .empty { color:#8b949e; font-size:13px; text-align:center; padding:40px 10px; }
 
-const graph = JSON.parse(fs.readFileSync("data/graph.json", "utf8"));
-const geoNodes = [];
-for (const n of graph.nodes) {
-  if (GEO[n.id]) {
-    geoNodes.push({ id: n.id, type: n.type, count: n.count, lng: GEO[n.id][0], lat: GEO[n.id][1] });
-  }
-}
-geoNodes.sort((a, b) => b.count - a.count);
-fs.writeFileSync("data/geo-nodes.json", JSON.stringify(geoNodes, null, 2), "utf8");
-console.log(`✓ 匹配图谱实体 ${geoNodes.length} 个 → data/geo-nodes.json`);
+    #map { flex:1; height:100%; }
+
+    .mm-popup { font-family:"Microsoft YaHei",sans-serif; color:#0d1117; max-width:240px; }
+    .mm-popup .p-title { font-size:13px; font-weight:600; line-height:1.4; margin-bottom:6px; }
+    .mm-popup .p-time { font-size:11px; color:#57606a; }
+    .mm-popup .p-loc { font-size:11px; color:#0969da; margin-top:2px; }
+    .mm-popup img { width:100%; border-radius:4px; margin-top:6px; display:block; }
+    .maplibregl-popup-content { border-radius:8px; padding:10px 12px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="sidebar">
+      <div id="sidebar-header">
+        <h1>📍 新闻事件地图</h1>
+        <div class="sub" id="stats">加载中…</div>
+        <input class="search" id="search" placeholder="搜索标题、地点或主题…" />
+      </div>
+      <div id="list"></div>
+    </div>
+    <div id="map"></div>
+  </div>
+
+  <script>
+    let allNews = [];
+    let activeId = null;
+    const markers = new Map(); // articleId -> { marker, popup }
+
+    const map = new maplibregl.Map({
+      container: "map",
+      style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
+      center: [42, 29],
+      zoom: 2.6,
+    });
+    map.addControl(new maplibregl.NavigationControl(), "top-right");
+    map.on("load", () => {
+      map.setProjection({ type: "globe" });
+    });
+
+    function formatTime(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      const diffMs = Date.now() - d.getTime();
+      const h = diffMs / 3600000;
+      if (h < 1) return `${Math.max(1, Math.round(h * 60))}分钟前`;
+      if (h < 24) return `${Math.round(h)}小时前`;
+      if (h < 24 * 7) return `${Math.round(h / 24)}天前`;
+      return d.toISOString().slice(0, 16).replace("T", " ");
+    }
+
+    function formatExact(iso) {
+      if (!iso) return "";
+      return new Date(iso).toISOString().slice(0, 16).replace("T", " ");
+    }
+
+    fetch("data/newsmap.json").then(r => r.json()).then(data => {
+      allNews = data;
+      const locCount = new Set(data.map(n => n.locationName)).size;
+      document.getElementById("stats").textContent = `近7天 ${data.length} 条新闻事件 · ${locCount} 个地点`;
+
+      for (const n of data) {
+        const el = document.createElement("div");
+        el.style.cssText = "width:14px;height:14px;border-radius:50%;background:#58a6ff;border:2px solid #0d1117;box-shadow:0 0 6px #58a6ffaa;cursor:pointer;";
+
+        const popup = new maplibregl.Popup({ offset:14, closeButton:false, closeOnClick:false }).setHTML(`
+          <div class="mm-popup">
+            <div class="p-title">${escapeHtml(n.title)}</div>
+            <div class="p-time">🕒 ${formatExact(n.publishedAt)}</div>
+            <div class="p-loc">📍 ${escapeHtml(n.locationName)}</div>
+            ${n.imageUrl ? `<img src="${n.imageUrl}" loading="lazy" onerror="this.remove()" />` : ""}
+          </div>`);
+
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat([n.lng, n.lat])
+          .setPopup(popup)
+          .addTo(map);
+
+        el.addEventListener("mouseenter", () => marker.togglePopup());
+        el.addEventListener("mouseleave", () => { if (popup.isOpen()) marker.togglePopup(); });
+        el.addEventListener("click", () => selectNews(n.articleId));
+
+        markers.set(n.articleId, { marker, popup });
+      }
+
+      render(allNews);
+    }).catch(e => {
+      document.getElementById("stats").textContent = "加载失败：" + e.message;
+    });
+
+    function escapeHtml(s) {
+      return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+
+    function render(list) {
+      const el = document.getElementById("list");
+      if (!list.length) { el.innerHTML = `<div class="empty">没有匹配的新闻</div>`; return; }
+      el.innerHTML = list.map(n => `
+        <div class="card${n.articleId === activeId ? " active" : ""}" data-id="${n.articleId}">
+          <div class="card-title">${escapeHtml(n.title)}</div>
+          <div class="card-meta">
+            <span>${formatTime(n.publishedAt)}</span>
+            <span>·</span>
+            <span class="loc">📍 ${escapeHtml(n.locationName)}</span>
+          </div>
+          ${n.topics && n.topics.length ? `<div class="card-tags">${n.topics.slice(0,4).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join("")}</div>` : ""}
+        </div>`).join("");
+
+      el.querySelectorAll(".card").forEach(card => {
+        card.addEventListener("click", () => selectNews(Number(card.dataset.id)));
+      });
+    }
+
+    function selectNews(articleId) {
+      const n = allNews.find(x => x.articleId === articleId);
+      if (!n) return;
+      activeId = articleId;
+      render(currentFiltered());
+
+      map.flyTo({ center: [n.lng, n.lat], zoom: 6, essential: true });
+
+      markers.forEach(({ popup }) => { if (popup.isOpen()) popup.remove(); });
+      const entry = markers.get(articleId);
+      if (entry) entry.marker.togglePopup();
+    }
+
+    let currentQuery = "";
+    function currentFiltered() {
+      if (!currentQuery) return allNews;
+      const q = currentQuery;
+      return allNews.filter(n =>
+        n.title.toLowerCase().includes(q) ||
+        n.locationName.toLowerCase().includes(q) ||
+        (n.topics || []).some(t => t.toLowerCase().includes(q)));
+    }
+
+    document.getElementById("search").addEventListener("input", e => {
+      currentQuery = e.target.value.trim().toLowerCase();
+      render(currentFiltered());
+    });
+  </script>
+</body>
+</html>
