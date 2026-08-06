@@ -137,10 +137,7 @@
       const groups = [];
       for (const [locationName, items] of byLoc) {
         items.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-        const typeCounts = {};
-        items.forEach(n => typeCounts[n.eventType] = (typeCounts[n.eventType] || 0) + 1);
-        const dominantType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0][0];
-        groups.push({ locationName, lng: items[0].lng, lat: items[0].lat, items, count: items.length, dominantType });
+        groups.push({ locationName, lng: items[0].lng, lat: items[0].lat, items, count: items.length });
       }
       return groups;
     }
@@ -186,13 +183,13 @@
       markers.clear();
 
       for (const g of buildGroups(list)) {
-        const st = styleFor(g.dominantType);
         const size = Math.round(Math.min(46, 22 + Math.sqrt(g.count) * 4));
 
+        // 地图标识不分类型，统一样式，一个地点一个标识；分类信息在列表和浮窗里体现
         const el = document.createElement("div");
         el.className = "cluster-marker";
-        el.style.cssText = `width:${size}px;height:${size}px;background:${st.color};box-shadow:0 0 8px ${st.color}aa;font-size:${g.count > 99 ? 10 : g.count > 1 ? 12 : 13}px;`;
-        el.textContent = g.count > 1 ? String(g.count) : st.icon;
+        el.style.cssText = `width:${size}px;height:${size}px;background:#58a6ff;box-shadow:0 0 8px #58a6ffaa;font-size:${g.count > 99 ? 10 : 13}px;`;
+        el.textContent = String(g.count);
         el.title = `${g.locationName} · ${g.count} 条事件`;
 
         const popup = new maplibregl.Popup({ offset: size / 2 + 8, closeButton:true, closeOnClick:false, maxWidth:"300px" });
