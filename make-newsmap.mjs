@@ -83,23 +83,6 @@ for (const r of rows) {
   });
 }
 
-// 同坐标微偏移，避免完全重叠
-const groups = new Map();
-for (const item of items) {
-  const key = `${item.lng},${item.lat}`;
-  if (!groups.has(key)) groups.set(key, []);
-  groups.get(key).push(item);
-}
-for (const group of groups.values()) {
-  if (group.length < 2) continue;
-  const radius = 0.2;
-  group.forEach((item, i) => {
-    const angle = (2 * Math.PI * i) / group.length;
-    item.lng += radius * Math.cos(angle);
-    item.lat += radius * Math.sin(angle);
-  });
-}
-
 items.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
 fs.mkdirSync("data", { recursive: true });

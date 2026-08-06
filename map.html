@@ -34,13 +34,22 @@
 
     #map { flex:1; height:100%; }
 
-    .mm-popup { font-family:"Microsoft YaHei",sans-serif; color:#0d1117; max-width:240px; }
-    .mm-popup .p-title { font-size:13px; font-weight:600; line-height:1.4; margin-bottom:6px; }
-    .mm-popup .p-time { font-size:11px; color:#57606a; }
-    .mm-popup .p-loc { font-size:11px; color:#0969da; margin-top:2px; }
-    .mm-popup .p-type { font-size:10.5px; font-weight:600; display:inline-block; padding:1px 7px; border-radius:4px; margin-bottom:6px; }
-    .mm-popup img { width:100%; border-radius:4px; margin-top:6px; display:block; }
-    .mm-popup .p-link { font-size:11px; color:#0969da; margin-top:6px; font-weight:600; }
+    .cluster-marker { display:flex; align-items:center; justify-content:center; border-radius:50%; border:2px solid #0d1117; cursor:pointer; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+    .cluster-marker:hover { filter:brightness(1.15); }
+
+    .cluster-popup { font-family:"Microsoft YaHei",sans-serif; color:#0d1117; width:280px; }
+    .cluster-header { display:flex; justify-content:space-between; align-items:baseline; padding-bottom:8px; margin-bottom:8px; border-bottom:1px solid #d0d7de; }
+    .cluster-loc { font-weight:700; font-size:13.5px; }
+    .cluster-count { font-size:11px; color:#57606a; white-space:nowrap; }
+    .cluster-list { max-height:320px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+    .cluster-row { padding:8px 9px; border-radius:6px; background:#f6f8fa; cursor:pointer; transition:background .1s; }
+    .cluster-row:hover { background:#e7ecf1; }
+    .cluster-row.flash { background:#fff3b0; }
+    .cr-top { display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:4px; }
+    .cr-badge { font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:4px; white-space:nowrap; }
+    .cr-time { font-size:10px; color:#57606a; white-space:nowrap; }
+    .cr-title { font-size:12px; line-height:1.35; margin-bottom:4px; }
+    .cr-link { font-size:10.5px; color:#0969da; font-weight:600; }
     .maplibregl-popup-content { border-radius:8px; padding:10px 12px; }
   </style>
 </head>
@@ -76,7 +85,12 @@
     let allNews = [];
     let activeId = null;
     let activeTypes = new Set(Object.keys(TOPIC_STYLE)); // 当前启用的类型（图例可点击筛选）
-    const markers = new Map(); // articleId -> { marker, popup }
+    const markers = new Map(); // locationName -> { marker, popup, group }
+
+    // 悬停时鼠标从标识移到浮窗之间有间隙，用短延时桥接，避免中途关闭
+    let closeTimer = null;
+    function cancelClose() { if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; } }
+    function scheduleClose(popup) { cancelClose(); closeTimer = setTimeout(() => popup.remove(), 250); }
 
     const map = new maplibregl.Map({
       container: "map",
@@ -100,52 +114,13 @@
       return d.toISOString().slice(0, 16).replace("T", " ");
     }
 
-    function formatExact(iso) {
-      if (!iso) return "";
-      return new Date(iso).toISOString().slice(0, 16).replace("T", " ");
-    }
-
     fetch("data/newsmap.json").then(r => r.json()).then(data => {
       allNews = data;
       const locCount = new Set(data.map(n => n.locationName)).size;
       document.getElementById("stats").textContent = `近7天 ${data.length} 条新闻事件 · ${locCount} 个地点`;
 
-      for (const n of data) {
-        const st = styleFor(n.eventType);
-        const el = document.createElement("div");
-        el.className = "marker-pin";
-        el.style.cssText = `width:20px;height:20px;border-radius:50%;background:${st.color};border:2px solid #0d1117;box-shadow:0 0 6px ${st.color}aa;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;line-height:1;`;
-        el.textContent = st.icon;
-        el.title = st.label;
-
-        const popup = new maplibregl.Popup({ offset:16, closeButton:false, closeOnClick:false }).setHTML(`
-          <div class="mm-popup">
-            <div class="p-type" style="background:${st.color}22;color:${st.color}">${st.icon} ${st.label}</div>
-            <div class="p-title">${escapeHtml(n.title)}</div>
-            <div class="p-time">🕒 ${formatExact(n.publishedAt)}</div>
-            <div class="p-loc">📍 ${escapeHtml(n.locationName)}</div>
-            ${n.imageUrl ? `<img src="${n.imageUrl}" loading="lazy" onerror="this.remove()" />` : ""}
-            ${n.url ? `<div class="p-link">查看原文 ↗</div>` : ""}
-          </div>`);
-
-        const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([n.lng, n.lat])
-          .setPopup(popup)
-          .addTo(map);
-
-        el.addEventListener("mouseenter", () => marker.togglePopup());
-        el.addEventListener("mouseleave", () => { if (popup.isOpen()) marker.togglePopup(); });
-        el.addEventListener("click", () => {
-          activeId = n.articleId;
-          render(currentFiltered());
-          if (n.url) window.open(n.url, "_blank", "noopener");
-        });
-
-        markers.set(n.articleId, { marker, popup });
-      }
-
       renderLegend();
-      applyMarkerVisibility();
+      renderMarkers(typeFiltered());
       render(currentFiltered());
     }).catch(e => {
       document.getElementById("stats").textContent = "加载失败：" + e.message;
@@ -153,6 +128,90 @@
 
     function escapeHtml(s) {
       return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+
+    // 同一地点的多条事件合并为一个标识，按 locationName 分组
+    function buildGroups(list) {
+      const byLoc = new Map();
+      for (const n of list) {
+        if (!byLoc.has(n.locationName)) byLoc.set(n.locationName, []);
+        byLoc.get(n.locationName).push(n);
+      }
+      const groups = [];
+      for (const [locationName, items] of byLoc) {
+        items.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+        const typeCounts = {};
+        items.forEach(n => typeCounts[n.eventType] = (typeCounts[n.eventType] || 0) + 1);
+        const dominantType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0][0];
+        groups.push({ locationName, lng: items[0].lng, lat: items[0].lat, items, count: items.length, dominantType });
+      }
+      return groups;
+    }
+
+    function buildPopupContent(group) {
+      const wrap = document.createElement("div");
+      wrap.className = "cluster-popup";
+      wrap.innerHTML = `
+        <div class="cluster-header">
+          <span class="cluster-loc">📍 ${escapeHtml(group.locationName)}</span>
+          <span class="cluster-count">${group.count} 条事件</span>
+        </div>
+        <div class="cluster-list">
+          ${group.items.map(n => {
+            const st = styleFor(n.eventType);
+            return `<div class="cluster-row" data-id="${n.articleId}">
+              <div class="cr-top">
+                <span class="cr-badge" style="background:${st.color}22;color:${st.color}">${st.icon} ${st.label}</span>
+                <span class="cr-time">${formatTime(n.publishedAt)}</span>
+              </div>
+              <div class="cr-title">${escapeHtml(n.title)}</div>
+              ${n.url ? `<div class="cr-link">阅读原文 ↗</div>` : ""}
+            </div>`;
+          }).join("")}
+        </div>`;
+
+      const list = wrap.querySelector(".cluster-list");
+      list.addEventListener("wheel", e => e.stopPropagation());
+      wrap.querySelectorAll(".cluster-row").forEach(row => {
+        row.addEventListener("click", () => {
+          const n = group.items.find(x => x.articleId === Number(row.dataset.id));
+          if (!n) return;
+          activeId = n.articleId;
+          render(currentFiltered());
+          if (n.url) window.open(n.url, "_blank", "noopener");
+        });
+      });
+      return wrap;
+    }
+
+    function renderMarkers(list) {
+      markers.forEach(({ marker }) => marker.remove());
+      markers.clear();
+
+      for (const g of buildGroups(list)) {
+        const st = styleFor(g.dominantType);
+        const size = Math.round(Math.min(46, 22 + Math.sqrt(g.count) * 4));
+
+        const el = document.createElement("div");
+        el.className = "cluster-marker";
+        el.style.cssText = `width:${size}px;height:${size}px;background:${st.color};box-shadow:0 0 8px ${st.color}aa;font-size:${g.count > 99 ? 10 : g.count > 1 ? 12 : 13}px;`;
+        el.textContent = g.count > 1 ? String(g.count) : st.icon;
+        el.title = `${g.locationName} · ${g.count} 条事件`;
+
+        const popup = new maplibregl.Popup({ offset: size / 2 + 8, closeButton:false, closeOnClick:false, maxWidth:"300px" });
+        const content = buildPopupContent(g);
+        popup.setDOMContent(content);
+        content.addEventListener("mouseenter", cancelClose);
+        content.addEventListener("mouseleave", () => scheduleClose(popup));
+
+        const marker = new maplibregl.Marker({ element: el }).setLngLat([g.lng, g.lat]).setPopup(popup).addTo(map);
+
+        el.addEventListener("mouseenter", () => { cancelClose(); if (!popup.isOpen()) marker.togglePopup(); });
+        el.addEventListener("mouseleave", () => scheduleClose(popup));
+        el.addEventListener("click", () => { cancelClose(); if (!popup.isOpen()) marker.togglePopup(); });
+
+        markers.set(g.locationName, { marker, popup, group: g });
+      }
     }
 
     function renderLegend() {
@@ -166,17 +225,9 @@
           const type = item.dataset.type;
           if (activeTypes.has(type)) activeTypes.delete(type); else activeTypes.add(type);
           renderLegend();
-          applyMarkerVisibility();
+          renderMarkers(typeFiltered());
           render(currentFiltered());
         });
-      });
-    }
-
-    function applyMarkerVisibility() {
-      markers.forEach((entry, articleId) => {
-        const n = allNews.find(x => x.articleId === articleId);
-        const show = n && activeTypes.has(n.eventType);
-        entry.marker.getElement().style.display = show ? "" : "none";
       });
     }
 
@@ -208,17 +259,30 @@
       activeId = articleId;
       render(currentFiltered());
 
+      const entry = markers.get(n.locationName);
+      if (!entry) return;
+
       map.flyTo({ center: [n.lng, n.lat], zoom: 6, essential: true });
 
+      cancelClose();
       markers.forEach(({ popup }) => { if (popup.isOpen()) popup.remove(); });
-      const entry = markers.get(articleId);
-      if (entry) entry.marker.togglePopup();
+      if (!entry.popup.isOpen()) entry.marker.togglePopup();
+
+      requestAnimationFrame(() => {
+        const rowEl = entry.popup.getElement()?.querySelector(`.cluster-row[data-id="${articleId}"]`);
+        if (!rowEl) return;
+        rowEl.scrollIntoView({ block: "nearest" });
+        rowEl.classList.add("flash");
+        setTimeout(() => rowEl.classList.remove("flash"), 1200);
+      });
     }
 
     let currentQuery = "";
+    function typeFiltered() {
+      return allNews.filter(n => activeTypes.has(n.eventType));
+    }
     function currentFiltered() {
-      return allNews.filter(n => {
-        if (!activeTypes.has(n.eventType)) return false;
+      return typeFiltered().filter(n => {
         if (!currentQuery) return true;
         const st = styleFor(n.eventType);
         return n.title.toLowerCase().includes(currentQuery) ||
