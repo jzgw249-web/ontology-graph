@@ -149,6 +149,8 @@ flowchart LR
 
 当前完成的是前三层（球体、自动鸟瞰、建筑白模）。参考图中的真实纹理体育场属于最后两层，必须由卫星/无人机/航拍影像经过摄影测量或三维重建形成模型后才能呈现，不能由普通二维底图自动生成。MapLibre 保留为地图与相机主引擎；未来可通过 `raster-dem` 接入 DEM，通过 COG/WMTS/XYZ 接入遥感影像，并通过 Three.js `CustomLayerInterface` 加载带地理定位的 glTF/GLB 或 3D Tiles 数据。
 
+**实景三维验证模块**：`reality-demo.mjs` 按需加载 MapLibre 官方示例采用的公开 AGI 园区 `tileset.json`，通过 Three.js + `3d-tiles-renderer` 将 OGC 3D Tiles 作为自定义三维图层叠加到同一个 MapLibre 场景。用户点击“加载实景三维试验区”后才下载模型，可随时返回全球新闻地图；该模块只用于验证渲染链路、相机和 HTML 标识叠加，不代表中东目标区域已有实景数据。未来替换为 MinIO 中自有 `tileset.json` 时，页面交互层无需重写。
+
 ---
 
 ## 5. 交互时序图：新闻事件地图（map.html）
