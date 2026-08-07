@@ -49,7 +49,7 @@
 - make-viz.mjs — 图谱降采样 → data/viz.json
 - buildSemanticGraph.mjs — 语义关系合并为有向图 + 二次补翻 → data/semantic-graph.json
 - export-ontology.mjs — 导出本体 Schema（含支持语言）→ data/ontology.json
-- make-geoseed.mjs — 地理坐标种子 + 匹配图谱 → data/geo-nodes.json
+- make-geoseed.mjs — 地理坐标种子 → data/geo-seed.json
 - make-newsmap.mjs — 近 3 天新闻地点匹配 → data/newsmap.json
 - make-media.mjs — 多模态媒体资源提取（带图文章）→ data/media.json
 - make-multilang.mjs — 中英阿三语标签生成 → data/multilang.json

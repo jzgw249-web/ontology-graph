@@ -25,14 +25,3 @@ const GEO = {
 fs.mkdirSync("data", { recursive: true });
 fs.writeFileSync("data/geo-seed.json", JSON.stringify(GEO, null, 2), "utf8");
 console.log(`✓ 种子坐标 ${Object.keys(GEO).length} 个 → data/geo-seed.json`);
-
-const graph = JSON.parse(fs.readFileSync("data/graph.json", "utf8"));
-const geoNodes = [];
-for (const n of graph.nodes) {
-  if (GEO[n.id]) {
-    geoNodes.push({ id: n.id, type: n.type, count: n.count, lng: GEO[n.id][0], lat: GEO[n.id][1] });
-  }
-}
-geoNodes.sort((a, b) => b.count - a.count);
-fs.writeFileSync("data/geo-nodes.json", JSON.stringify(geoNodes, null, 2), "utf8");
-console.log(`✓ 匹配图谱实体 ${geoNodes.length} 个 → data/geo-nodes.json`);

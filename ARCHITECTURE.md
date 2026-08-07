@@ -85,7 +85,7 @@ flowchart LR
 | 4 | 本体 Schema | `src/ontology.ts` → `export-ontology.mjs` | `data/ontology.json` | `ontology.html` |
 | 4b | 公理合规检测 | `src/validateAxioms.ts` | `data/axiom-report.json` | `axioms.html` |
 | 5 | 情报溯源链 | `src/traceability.ts` | `data/traceability.json` | `trace.html` |
-| 6 | 地理可视化 + 新闻事件地图 | `make-geoseed.mjs` + `make-newsmap.mjs` | `data/geo-seed.json`/`geo-nodes.json`/`newsmap.json` | `map.html` |
+| 6 | 地理可视化 + 新闻事件地图 | `make-geoseed.mjs` + `make-newsmap.mjs` | `data/geo-seed.json`/`newsmap.json` | `map.html` |
 | 7 | 多模态多语种检索 | `make-media.mjs` + `make-multilang.mjs` | `data/media.json`/`multilang.json` | `media.html` |
 
 **阶段 1 — 共现图谱**（`buildGraph.ts`，151 行）：读全部 `entitiesJson` 非空文章，实体先过 `entity_aliases` 归一化（同名多语言/多拼写合并为一个 `canonicalZh`），同篇文章内的实体两两连边、边权 = 共现次数。内置**公理 C1 自动纠偏**：任何在已知国家名单里、但类型被误标为 `organization` 的实体会被强制改回 `location`，纠偏日志写入 `data/type-fix-log.json`，对每次新抓的数据都会重新执行，不需要手动干预。
@@ -100,7 +100,7 @@ flowchart LR
 
 **阶段 5 — 溯源链**（`traceability.ts`，108 行）：每条语义三元组回链到源文章、MinIO 原始 JSON 路径、以及新闻配图，做到 100% 可溯源到文章 + MinIO，约 42.8% 能关联到配图（构成多模态溯源）。
 
-**阶段 6 — 地理可视化**：`make-geoseed.mjs` 给 50 个高频地理实体配上经纬度种子坐标，供本体实体地图（`map.html` 早期形态）使用；`make-newsmap.mjs`（106 行，本次交接新增）是这一阶段的延伸——单独查询近 3 天文章，把 `entitiesJson.locations` 归一化后去种子表里找坐标，命中就产出一条新闻事件记录，`map.html` 据此把同地点的事件聚合成一个标识（见第 4 节时序图）。
+**阶段 6 — 地理可视化**：`make-geoseed.mjs` 给 50 个高频地理实体配上经纬度种子坐标，产出 `data/geo-seed.json` 这张坐标查找表；`make-newsmap.mjs`（106 行）单独查询近 3 天文章，把 `entitiesJson.locations` 归一化后去这张种子表里找坐标，命中就产出一条新闻事件记录，`map.html` 据此把同地点的事件聚合成一个标识（见第 4 节时序图）。
 
 **阶段 7 — 多模态多语种检索**：`make-media.mjs` 抓所有带图文章供 `media.html` 做文本→图像检索；`make-multilang.mjs` 为高频实体生成中英阿三语标签供跨语言检索。
 
