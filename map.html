@@ -5,15 +5,6 @@
   <title>新闻事件地图</title>
   <link href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" rel="stylesheet" />
   <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
-        "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/",
-        "3d-tiles-renderer": "https://cdn.jsdelivr.net/npm/3d-tiles-renderer@0.4.21/build/index.three.js"
-      }
-    }
-  </script>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     html, body { height:100%; font-family:"Microsoft YaHei",sans-serif; background:#0d1117; color:#e6edf3; }
@@ -42,11 +33,6 @@
     .empty { color:#8b949e; font-size:13px; text-align:center; padding:40px 10px; }
 
     #map { flex:1; height:100%; }
-    #reality-controls { position:absolute; right:52px; bottom:24px; z-index:5; display:flex; align-items:flex-end; flex-direction:column; gap:7px; pointer-events:none; }
-    #reality-controls button { pointer-events:auto; border:1px solid #58a6ff; border-radius:7px; padding:8px 12px; background:#161b22e8; color:#e6edf3; font-size:12px; cursor:pointer; box-shadow:0 4px 14px #0008; }
-    #reality-controls button:hover { background:#1f6feb; }
-    #reality-controls button:disabled { cursor:wait; opacity:.6; }
-    #reality-status { max-width:280px; padding:5px 8px; border-radius:5px; background:#0d1117dd; color:#8b949e; font-size:11px; text-align:right; }
 
     .cluster-marker { display:flex; align-items:center; justify-content:center; border-radius:50%; border:2px solid #0d1117; cursor:pointer; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.6); }
     .cluster-marker:hover { filter:brightness(1.15); }
@@ -79,11 +65,6 @@
       <div id="list"></div>
     </div>
     <div id="map"></div>
-    <div id="reality-controls">
-      <div id="reality-status">&#23454;&#26223;&#19977;&#32500;&#32452;&#20214;&#21021;&#22987;&#21270;&#20013;&hellip;</div>
-      <button id="return-news" hidden>&#36820;&#22238;&#26032;&#38395;&#22320;&#22270;</button>
-      <button id="reality-demo" disabled>&#21152;&#36733;&#23454;&#26223;&#19977;&#32500;&#35797;&#39564;&#21306;</button>
-    </div>
   </div>
 
   <script>
@@ -117,7 +98,6 @@
       canvasContextAttributes: { antialias: true },
     });
     map.addControl(new maplibregl.NavigationControl(), "top-right");
-    window.newsMap = map;
     map.on("style.load", () => {
       map.setProjection({ type: "globe" });
 
@@ -359,6 +339,5 @@
       render(currentFiltered());
     });
   </script>
-  <script type="module" src="reality-demo.mjs"></script>
 </body>
 </html>
