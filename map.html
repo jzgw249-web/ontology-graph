@@ -114,7 +114,7 @@
     fetch("data/newsmap.json").then(r => r.json()).then(data => {
       allNews = data;
       const locCount = new Set(data.map(n => n.locationName)).size;
-      document.getElementById("stats").textContent = `近7天 ${data.length} 条新闻事件 · ${locCount} 个地点`;
+      document.getElementById("stats").textContent = `近3天 ${data.length} 条新闻事件 · ${locCount} 个地点`;
 
       renderLegend();
       renderMarkers(typeFiltered());

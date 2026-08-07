@@ -33,10 +33,10 @@ function normalize(name) {
 const [rows] = await db.execute(`
   SELECT id, title, titleZh, imageUrl, url, country, publishedAt, entitiesJson, topics, storageKey
   FROM articles
-  WHERE publishedAt >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+  WHERE publishedAt >= DATE_SUB(NOW(), INTERVAL 3 DAY)
   ORDER BY publishedAt DESC
 `);
-console.log(`近7天文章: ${rows.length} 篇`);
+console.log(`近3天文章: ${rows.length} 篇`);
 
 let matched = 0, skipped = 0;
 const locationCounts = {};

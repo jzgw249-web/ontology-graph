@@ -100,7 +100,7 @@ flowchart LR
 
 **阶段 5 — 溯源链**（`traceability.ts`，108 行）：每条语义三元组回链到源文章、MinIO 原始 JSON 路径、以及新闻配图，做到 100% 可溯源到文章 + MinIO，约 42.8% 能关联到配图（构成多模态溯源）。
 
-**阶段 6 — 地理可视化**：`make-geoseed.mjs` 给 50 个高频地理实体配上经纬度种子坐标，供本体实体地图（`map.html` 早期形态）使用；`make-newsmap.mjs`（106 行，本次交接新增）是这一阶段的延伸——单独查询近 7 天文章，把 `entitiesJson.locations` 归一化后去种子表里找坐标，命中就产出一条新闻事件记录，`map.html` 据此把同地点的事件聚合成一个标识（见第 4 节时序图）。
+**阶段 6 — 地理可视化**：`make-geoseed.mjs` 给 50 个高频地理实体配上经纬度种子坐标，供本体实体地图（`map.html` 早期形态）使用；`make-newsmap.mjs`（106 行，本次交接新增）是这一阶段的延伸——单独查询近 3 天文章，把 `entitiesJson.locations` 归一化后去种子表里找坐标，命中就产出一条新闻事件记录，`map.html` 据此把同地点的事件聚合成一个标识（见第 4 节时序图）。
 
 **阶段 7 — 多模态多语种检索**：`make-media.mjs` 抓所有带图文章供 `media.html` 做文本→图像检索；`make-multilang.mjs` 为高频实体生成中英阿三语标签供跨语言检索。
 
@@ -143,7 +143,7 @@ flowchart TB
 sequenceDiagram
   autonumber
   participant Build as make-newsmap.mjs（构建期，离线）
-  participant DB as MySQL（近 7 天 articles）
+  participant DB as MySQL（近 3 天 articles）
   participant JSON as data/newsmap.json
   participant U as 用户
   participant JS as map.html 前端脚本
@@ -154,7 +154,7 @@ sequenceDiagram
 
   rect rgb(30, 35, 42)
   Note over Build,JSON: 构建期
-  Build->>DB: SELECT ... WHERE publishedAt >= NOW()-7d
+  Build->>DB: SELECT ... WHERE publishedAt >= NOW()-3d
   DB-->>Build: 文章 + entitiesJson + storageKey
   Build->>Build: locations 归一化 → 匹配 geo-seed 坐标\nstorageKey 前缀 → eventType
   Build->>JSON: 写入（lng/lat/eventType/minioPath）
@@ -192,7 +192,7 @@ sequenceDiagram
 
 **几个决定这套交互形态的取舍：**
 
-- 标识从"每篇文章一个"改成"每地点一个"，是因为同地点事件密集（如"伊朗"7 天内 167 条）时逐条打点会完全重叠、互相遮挡；聚合后标识只承载数量信息，分类色彩下放到列表卡片和浮窗行里，避免标识本身信息过载。
+- 标识从"每篇文章一个"改成"每地点一个"，是因为同地点事件密集（如"伊朗"3 天内 78 条）时逐条打点会完全重叠、互相遮挡；聚合后标识只承载数量信息，分类色彩下放到列表卡片和浮窗行里，避免标识本身信息过载。
 - 悬停 → 点击：浮窗内容需要滚轮翻阅和点击跳转，鼠标必须能在标识和浮窗之间自由移动，纯悬停容易因为鼠标移动路径问题误关闭；改成点击触发后浮窗持久开启，靠再点一次或点其他标识来切换，多了一个关闭按钮兜底。
 - 点击浮窗内一行不是"选中"而是直接 `window.open` 跳原文——用户点开浮窗本身就是"我想看这条"的信号，不需要再多一步确认。
 
@@ -204,7 +204,7 @@ sequenceDiagram
 
 - **`articles.topics` 字段实际为空**——`make-newsmap.mjs` 的事件分类改用 `storageKey` 的 MinIO 目录前缀（`technology/`、`war-conflict/` 等）反推，不依赖这个空字段。
 - **`country` 字段约 60% 缺失**，所有地理定位统一走 `entitiesJson.locations` + 归一化，不用 `country`。
-- **50 个地理种子坐标**只覆盖高频地点，近 7 天约 2300 篇文章里能定位坐标的约 1400 篇（~60%），其余因为提不到已知地点被跳过，不做模糊定位。
+- **50 个地理种子坐标**只覆盖高频地点，近 3 天约 1300 篇文章里能定位坐标的约 800 篇（~60%），其余因为提不到已知地点被跳过，不做模糊定位。
 - **公理 C2/C4/C6** 依赖尚未建立的实体属性 schema（设施归属、人物国籍、地理唯一性），页面上标注"待第二步"，不是检测失败。
 - **阿语标签覆盖率 41%**——是从原始抓取文本里挑出来的阿语原文，不是机器翻译补全，所以覆盖率如实反映数据本身。
 - **MapLibre 锁定 5.24.0 不跟进 6.x**——6.x 起只发 ES Module，升级需要把页面脚本改造成 `type="module"`，收益不足以支撑这个改动，除非将来有必须用到的 6.x 新特性。
