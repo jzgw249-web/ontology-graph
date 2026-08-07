@@ -94,10 +94,60 @@
       style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
       center: [42, 29],
       zoom: 2.6,
+      maxPitch: 80,
+      canvasContextAttributes: { antialias: true },
     });
     map.addControl(new maplibregl.NavigationControl(), "top-right");
     map.on("style.load", () => {
       map.setProjection({ type: "globe" });
+
+      // CARTO 的 building 矢量图层带 render_height / render_min_height。
+      // 在城市级缩放下拉伸为建筑白模，后续实景三维模型仍可作为 custom layer 叠加。
+      if (!map.getLayer("3d-buildings")) {
+        const firstLabelLayer = (map.getStyle().layers || []).find(layer =>
+          layer.type === "symbol" && layer.layout && layer.layout["text-field"]
+        );
+        map.addLayer({
+          id: "3d-buildings",
+          source: "carto",
+          "source-layer": "building",
+          type: "fill-extrusion",
+          minzoom: 14,
+          filter: ["!=", ["get", "hide_3d"], true],
+          paint: {
+            "fill-extrusion-color": [
+              "interpolate", ["linear"], ["get", "render_height"],
+              0, "#4b5563",
+              80, "#9ca3af",
+              250, "#d1d5db"
+            ],
+            "fill-extrusion-height": [
+              "interpolate", ["linear"], ["zoom"],
+              14, 0,
+              15.5, ["coalesce", ["get", "render_height"], 6]
+            ],
+            "fill-extrusion-base": [
+              "interpolate", ["linear"], ["zoom"],
+              14, 0,
+              15.5, ["coalesce", ["get", "render_min_height"], 0]
+            ],
+            "fill-extrusion-opacity": 0.88,
+          },
+        }, firstLabelLayer && firstLabelLayer.id);
+      }
+    });
+
+    // 从全球/区域视角进入城市级缩放时自动切换到鸟瞰角度；退回区域级时恢复俯视。
+    let city3DView = false;
+    map.on("zoomend", () => {
+      const zoom = map.getZoom();
+      if (zoom >= 14 && !city3DView) {
+        city3DView = true;
+        map.easeTo({ pitch: 58, duration: 700, essential: true });
+      } else if (zoom < 13 && city3DView) {
+        city3DView = false;
+        map.easeTo({ pitch: 0, duration: 500, essential: true });
+      }
     });
 
     function formatTime(iso) {
