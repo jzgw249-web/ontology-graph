@@ -2,6 +2,11 @@
 
 地缘情报多模态多语种知识工程系统：从 redroom 采集的原始数据出发，构建实体关系图谱、抽取语义关系、定义领域本体、建立可量化的质量评价体系，实现情报完整可溯源、基于本体的地理可视化，以及文本-图像多模态、中英阿多语种检索。
 
+交付文档：
+
+- [项目最终交付说明](PROJECT_DELIVERY.md)
+- [系统架构说明](ARCHITECTURE.md)
+
 ## 数据流
 
     redroom 采集 → MinIO 按主题归档 → 共现图谱 → 语义关系 → 本体 Schema → 质量评价 → 溯源链 → 地理可视化 → 多模态多语种检索
@@ -23,7 +28,7 @@
 | 4 | 本体 Schema（多模态 + 多语种） | ontology.html |
 | 4b | 本体公理合规检测（本体驱动评价 + C1 纠偏） | axioms.html |
 | 5 | 情报溯源链（多模态：关联新闻配图） | trace.html |
-| 6 | 本体地理可视化（MapLibre） | map.html |
+| 6 | 近 3 天新闻事件地图（地点聚合 + MapLibre 3D 地球） | map.html |
 | 7 | 多模态多语种检索（文本→图像，中/英/阿） | media.html |
 
 ## 目录结构
@@ -45,6 +50,7 @@
 - buildSemanticGraph.mjs — 语义关系合并为有向图 + 二次补翻 → data/semantic-graph.json
 - export-ontology.mjs — 导出本体 Schema（含支持语言）→ data/ontology.json
 - make-geoseed.mjs — 地理坐标种子 + 匹配图谱 → data/geo-nodes.json
+- make-newsmap.mjs — 近 3 天新闻地点匹配 → data/newsmap.json
 - make-media.mjs — 多模态媒体资源提取（带图文章）→ data/media.json
 - make-multilang.mjs — 中英阿三语标签生成 → data/multilang.json
 - checkAlign2.mjs — 校验语义关系与图谱的实体对齐率
@@ -57,7 +63,7 @@
 - ontology.html — 本体 Schema（类层级 + 关系矩阵 + 公理 + 多语种支持）
 - axioms.html — 公理合规检测（维度扣分 + 违规明细）
 - trace.html — 溯源链（实体→关系→源文章→MinIO 原文→配图）
-- map.html — 地理可视化（MapLibre 3D 地球，点击实体飞到坐标）
+- map.html — 新闻事件地图（近 3 天、地点聚合、原文跳转、3D 地球和城市建筑层）
 - media.html — 多模态多语种检索（中/英/阿检索相关新闻图像）
 
 ## 用法
@@ -75,6 +81,7 @@
     npx tsx src/validateAxioms.ts        公理合规检测
     npx tsx src/traceability.ts          构建溯源链（含配图）
     node make-geoseed.mjs                生成地理坐标数据
+    node make-newsmap.mjs                生成近 3 天新闻地图数据
     node make-media.mjs                  提取多模态媒体资源
     node make-multilang.mjs              生成中英阿三语标签
 
@@ -115,7 +122,7 @@
 
 4. 情报完整可溯源 — 每条语义关系可追溯到源文章、MinIO 原始数据、以及新闻配图。
 
-5. 基于本体的地理可视化 — 本体实体按坐标呈现在 MapLibre 3D 地球上，点击飞到对应位置。
+5. 基于本体的地理可视化 — 近 3 天新闻按归一化地点呈现在 MapLibre 3D 地球上；同地点事件聚合为一个数量标识，点击后浏览新闻并跳转原文。高缩放级别展示矢量建筑拉伸层，为后续遥感和三维重建预留扩展空间。
 
 6. 多模态知识图谱 — 本体建模媒体资源（MediaResource），情报关系关联新闻配图，支持文本→图像的跨模态检索。
 
