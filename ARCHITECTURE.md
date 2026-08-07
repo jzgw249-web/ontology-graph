@@ -4,6 +4,16 @@
 
 本项目与 redroom 是两个独立的 Git 仓库，通过同一个 MySQL 实例与 MinIO bucket 解耦协作：**redroom 只写，ontology-graph 只读**。ontology-graph 没有常驻服务——所有处理都是"跑一次脚本、落地一份 JSON"，可视化层是 8 个纯静态 HTML 页面，直接在浏览器里 `fetch` 本地 JSON，没有后端 API、没有登录态。
 
+**目录**
+
+1. [技术架构图](#1-技术架构图)
+2. [技术栈](#2-技术栈)
+3. [数据流水线：各阶段说明](#3-数据流水线各阶段说明)
+4. [3D 球体渲染层](#4-3d-球体渲染层)
+5. [交互时序图：新闻事件地图](#5-交互时序图新闻事件地图maphtml)
+6. [已知边界](#6-已知边界)
+7. [运行方式](#7-运行方式)
+
 ---
 
 ## 1. 技术架构图
@@ -61,6 +71,8 @@ flowchart LR
 | 其余 5 页 | 无第三方库 | `ontology.html`/`axioms.html`/`trace.html`/`media.html` 均为 vanilla JS + `fetch` |
 | 部署 | `npx serve .` | 静态文件服务器；无鉴权、无会话 |
 
+> **版本踩坑记录**：最初锁定的 4.7.1 其实没有 `setProjection` 方法——globe 投影是 MapLibre **5.0** 才加入的 API，代码调用它是静默失效的，地图实际渲染的一直是平面墨卡托投影，不是真正的 3D 球体。直接升到最新的 6.x 又会 404——6.0 起不再提供传统 `<script src>` 能用的 UMD 打包文件，只发 ES Module（`maplibre-gl.mjs`）。最终锁定 **5.24.0**（5.x 系列最后一版）：既有 globe API，又保留 UMD 包，不用为了一个投影改动把全页脚本重构成 ES Module。同时把触发时机从 `load` 事件改成 MapLibre 官方示例推荐的 `style.load` 事件。
+
 ---
 
 ## 3. 数据流水线：各阶段说明
@@ -94,7 +106,36 @@ flowchart LR
 
 ---
 
-## 4. 交互时序图：新闻事件地图（map.html）
+## 4. 3D 球体渲染层
+
+地图不是平面投影加了个倾角，而是 MapLibre 的真·球体投影：底图瓦片被贴到一个三维球面上，可以拖拽旋转、缩放，靠近时自动过渡到接近平面的局部视角。
+
+```mermaid
+flowchart TB
+  A["new maplibregl.Map()\ncenter:[42,29] zoom:2.6\nstyle: dark-matter-gl-style"] --> B{{"style.load 事件\n（必须等样式就位）"}}
+  B --> C["map.setProjection({type:'globe'})"]
+  C --> D["WebGL 把瓦片贴到球面\n可旋转 / 缩放 / 惯性拖拽"]
+
+  E["data/newsmap.json\n每条含 lng/lat"] --> F["buildGroups()\n按 locationName 聚合"]
+  F --> G["每地点一个 Marker\n经纬度 → 球面三维坐标"]
+  G --> D
+
+  D --> H["近距离：局部近似平面\n远距离：完整地球轮廓"]
+
+  style C fill:#1f6feb33,stroke:#58a6ff
+  style D fill:#1f6feb33,stroke:#58a6ff
+```
+
+**关键点：**
+
+- **投影必须在 `style.load` 之后设置**，不能在 `new Map()` 的构造参数里指定，也不宜挂在 `load` 事件上——样式未就位时调用会失效。这是 MapLibre 官方 globe 示例的标准写法。
+- **Marker 的经纬度不需要为球体做任何转换**：仍然是 `setLngLat([lng, lat])`，MapLibre 内部负责把经纬度映射到球面三维坐标，并在地球背面自动隐藏标识。这意味着从平面切到球体，`renderMarkers()` 一行都不用改。
+- **`flyTo` 在球体下变成球面弧线飞行**，视觉上是地球转过去而不是画面平移，这个效果是投影切换白送的，不需要额外代码。
+- **底图样式沿用 `dark-matter-gl-style`**，和整个项目的深色系页面保持一致；球体外的空白区域即页面背景色（`#0d1117`），不额外加星空/大气层贴图，避免喧宾夺主。
+
+---
+
+## 5. 交互时序图：新闻事件地图（map.html）
 
 `map.html` 是唯一有复杂前端交互状态机的页面，其余 7 页基本是"拉数据 → 渲染 → 结束"。下图拆成两段：**构建期**（离线生成数据）和**运行期**（浏览器里的实际交互）。
 
@@ -106,6 +147,7 @@ sequenceDiagram
   participant JSON as data/newsmap.json
   participant U as 用户
   participant JS as map.html 前端脚本
+  participant Globe as MapLibre 球体
   participant List as 侧栏新闻列表
   participant Marker as 聚合标识（一地点一个）
   participant Popup as 事件浮窗
@@ -121,9 +163,12 @@ sequenceDiagram
   rect rgb(22, 27, 34)
   Note over U,Popup: 运行期
   U->>JS: 打开 map.html
+  JS->>Globe: new Map() → style.load\n→ setProjection({type:"globe"})
+  Globe-->>U: 渲染 3D 地球（可旋转/缩放）
   JS->>JSON: fetch
   JS->>JS: buildGroups()：按 locationName 聚合
   JS->>Marker: renderMarkers()：数量徽标，标识本身不分类型
+  Marker->>Globe: setLngLat() → 贴到球面\n（背面标识自动隐藏）
   JS->>List: render()：卡片按类型上色 + 徽章
 
   U->>Marker: 点击某地点标识
@@ -139,7 +184,8 @@ sequenceDiagram
 
   U->>List: 点击列表中某条新闻
   List->>JS: selectNews(articleId)
-  JS->>JS: map.flyTo(该新闻坐标)
+  JS->>Globe: map.flyTo(该新闻坐标)
+  Globe-->>U: 地球沿球面弧线转到该位置
   JS->>Popup: 打开对应地点浮窗\n滚动定位并高亮该条
   end
 ```
@@ -152,7 +198,7 @@ sequenceDiagram
 
 ---
 
-## 5. 已知边界
+## 6. 已知边界
 
 这些不是 bug，是当前阶段有意为之或依赖后续数据的限制：
 
@@ -161,10 +207,11 @@ sequenceDiagram
 - **50 个地理种子坐标**只覆盖高频地点，近 7 天约 2300 篇文章里能定位坐标的约 1400 篇（~60%），其余因为提不到已知地点被跳过，不做模糊定位。
 - **公理 C2/C4/C6** 依赖尚未建立的实体属性 schema（设施归属、人物国籍、地理唯一性），页面上标注"待第二步"，不是检测失败。
 - **阿语标签覆盖率 41%**——是从原始抓取文本里挑出来的阿语原文，不是机器翻译补全，所以覆盖率如实反映数据本身。
+- **MapLibre 锁定 5.24.0 不跟进 6.x**——6.x 起只发 ES Module，升级需要把页面脚本改造成 `type="module"`，收益不足以支撑这个改动，除非将来有必须用到的 6.x 新特性。
 
 ---
 
-## 6. 运行方式
+## 7. 运行方式
 
 ```bash
 # 前置：redroom 的 MySQL / MinIO 容器需运行
